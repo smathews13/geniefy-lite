@@ -1,0 +1,8 @@
+# geniefy-v3 App runtime deps (U77). The agent core + backend (geniefy_core/geniefy_app) are
+# staged into app/ by deploy.sh (source_code_path is ./app) rather than pip-installed.
+fastapi
+uvicorn[standard]
+databricks-sdk
+openai                 # geniefy_app.providers → FMAPI via the OpenAI-compatible serving API
+psycopg2-binary        # geniefy_app.store → Lakebase (Postgres) connection
+pyyaml                 # geniefy_core.template → default.yaml rubric/template

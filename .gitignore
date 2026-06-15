@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+
+# Frontend (U23): deps + build artifacts — the deploy rebuilds them (vite build, U24 §4)
+app/frontend/node_modules/
+app/static/
+*.local
+
+# App deploy staging (U77): deploy.sh copies the agent core + backend into app/ so the
+# Databricks App (source_code_path ./app) imports them at runtime — build artifacts, like static/.
+app/geniefy_core/
+app/geniefy_app/
+
+# Jobs-bundle staging (D54/U119): deploy_jobs.sh copies the agent core + entrypoint into
+# jobs-bundle/ so the standalone geniefy_schema_run job is self-contained — build artifacts.
+jobs-bundle/geniefy_core/
+jobs-bundle/geniefy_app/
+jobs-bundle/schema_run_entry.py
+
+# Databricks Asset Bundle state (Terraform state + sync snapshots). Each .databricks/ already
+# self-ignores via a nested `.gitignore` (`*`); these explicit entries make it unmistakable that
+# tfstate (which can hold sensitive state) is never committed.
+.databricks/
+jobs-bundle/.databricks/
+
+# Local Claude Code settings — personal/per-machine (absolute paths + local allow-list).
+# NOTE: .claude/settings.json (the shared GOTM immutability hook wiring) IS committed.
+.claude/settings.local.json
+
+# OS noise
+.DS_Store
+
+# Local env / secrets
+.env

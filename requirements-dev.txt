@@ -1,0 +1,24 @@
+# Dev / test dependencies for geniefy-lite — recreate the environment that runs the test suite.
+#
+#   python3 -m venv .venv
+#   .venv/bin/pip install -r requirements-dev.txt
+#   PYTHONPATH=src .venv/bin/python -m pytest -q        # -> 375 passed, 1 skipped
+#
+# The Databricks App runtime deps are declared (unpinned) in app/requirements.txt; the agent core
+# + backend (geniefy_core/geniefy_app) run from source (PYTHONPATH=src), not pip-installed.
+# These pins reproduce the validated local/test environment.
+
+# --- runtime (imported by the code under test) ---
+fastapi==0.136.3
+uvicorn==0.49.0
+starlette==1.2.1
+pydantic==2.13.4
+anyio==4.13.0
+databricks-sdk==0.117.0
+openai==2.41.0
+psycopg2-binary==2.9.12
+PyYAML==6.0.3
+
+# --- test-only ---
+pytest==9.0.3
+httpx==0.28.1

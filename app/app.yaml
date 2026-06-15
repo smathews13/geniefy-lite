@@ -1,0 +1,76 @@
+# Databricks App config for geniefy-v3.
+# app.yaml is the single runtime config surface (D33/NFR-A): the FastAPI backend (U5) reads
+# these GENIEFY_* env vars once at startup (AppConfig.from_env, U43) and fails fast on a
+# bad/missing required one. Edit here to choose the model and add MCP context providers —
+# the agent discovers them at deployment (D39). The built React SPA (U23) is served from `/`.
+command:
+  - uvicorn
+  - main:app
+  - --host
+  - "0.0.0.0"
+  - --port
+  - "8000"
+
+env:
+  - name: GENIEFY_ENV
+    value: databricks-app
+
+  # ── Model (FMAPI Claude) — choose the serving endpoint here (D4/D28/D33) ──────────────
+  - name: GENIEFY_MODEL_ENDPOINT
+    value: databricks-claude-sonnet-4-6   # or databricks-claude-opus-4-8 for max-quality comments
+
+  # ── Infra — bound at deploy from databricks.yml vars / app resource bindings (U8) ─────
+  - name: GENIEFY_WAREHOUSE_ID
+    valueFrom: sql-warehouse              # app resource binding (the bound SQL warehouse)
+  - name: GENIEFY_PG_HOST                 # Lakebase DEV-branch endpoint host (U77). DAB does
+    value: ep-curly-sunset-d2sz2asi.database.us-east-1.cloud.databricks.com  # NOT substitute
+                                          # ${var} in app.yaml env, so this is a literal; the
+                                          # app self-OAuths and the UI-added `geniefy-db`
+                                          # postgres binding grants the SP its branch role.
+  - name: GENIEFY_PG_DATABASE
+    value: geniefy                        # working-store database (D30)
+  - name: GENIEFY_PG_SCHEMA
+    value: geniefy
+  - name: GENIEFY_SECRET_SCOPE
+    value: geniefy                        # holds MCP provider tokens (D4/D5 — refs only)
+
+  # ── Pluggable MCP context providers (D34/D39) ────────────────────────────────────────
+  # A JSON array; one object per server. The agent discovers + queries these at deployment
+  # (Glean / Confluence / Atlassian / Genie / custom). Auth is a secret-scope reference,
+  # never a raw token. Add or remove servers here, then redeploy.
+  - name: GENIEFY_MCP_PROVIDERS
+    value: |
+      [
+        {
+          "name": "glean",
+          "server_url": "https://<workspace-host>/api/2.0/mcp/glean",
+          "transport": "streamable_http",
+          "auth": {"secret_scope": "geniefy", "key": "glean_token"},
+          "tool_allowlist": ["search"],
+          "query_template": "table {full_name}: {column_terms}",
+          "max_snippets": 8
+        }
+      ]
+
+  # ── Agent tunables (RunConfig; all optional, sensible defaults in AppConfig) ──────────
+  - name: GENIEFY_KEEP_THRESHOLD
+    value: "0.75"
+  - name: GENIEFY_MAX_INPUT_TOKENS_PER_CALL
+    value: "12000"                        # per-call token budget (cost predictability, D32)
+
+  # ── LLM + per-phase comment tunables (U81/D43/D47) — change here, no code change ──────
+  - name: GENIEFY_MAX_RETRIES
+    value: "5"                            # 429/rate-limit retry budget (D47)
+  - name: GENIEFY_BACKOFF_BASE
+    value: "0.5"                          # full-jitter backoff base seconds (D47)
+  - name: GENIEFY_LLM_TEMPERATURE
+    value: "0.0"                          # deterministic drafts
+  - name: GENIEFY_MAX_TOKENS
+    value: "4096"                         # default per-call output cap
+  - name: GENIEFY_REASON_TABLE_MAX_TOKENS
+    value: "20000"                        # richer table comment (D43/E1)
+  - name: GENIEFY_REASON_COLUMN_MAX_TOKENS
+    value: "20000"                        # per column-batch — deterministic, generous (U94): the
+                                          # 2000 cap truncated rich 150-word comments on wide
+                                          # tables → invalid JSON. Matches the proven table budget;
+                                          # a 25-col batch (~≤18k tokens) fits with headroom.

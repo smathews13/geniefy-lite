@@ -1,0 +1,122 @@
+# geniefy-v3 — Databricks Asset Bundle (U13 scaffold; sync-exclude + host-var fix: U15)
+# Deploys the geniefy App + resources. Fully parameterized (D12): the `dev`
+# target carries FE-VM `fe-vm-classic` defaults (D28); `prod` is for customers.
+#   databricks bundle validate -t dev -p fe-vm-classic
+#   databricks bundle deploy   -t dev -p fe-vm-classic
+bundle:
+  name: geniefy-v3
+
+# Dev-only tooling stays in git as build provenance but is NEVER uploaded to the
+# workspace on `bundle deploy` (D25 / U8 §9): GOTM orchestration + the dev
+# immutability hook are contributor tools, not the deployed product.
+sync:
+  # Force-include the deploy-staged core (deploy.sh copies geniefy_core/geniefy_app into app/;
+  # they're .gitignored build artifacts, so sync would otherwise drop them and the App would
+  # crash with ModuleNotFoundError). include re-adds gitignored paths to the upload (U77).
+  include:
+    - app/geniefy_core/**
+    - app/geniefy_app/**
+    - app/static/**          # the built SPA (vite build) — gitignored, but the App serves it at / (U77)
+  exclude:
+    - .gotm/
+    - .claude/
+
+variables:
+  host:
+    # Informational only — the actual deploy host comes from the CLI profile (-p) or
+    # DATABRICKS_HOST (auth fields can't interpolate ${var}). Documents the dev default;
+    # deploy.sh --host exports DATABRICKS_HOST for you.
+    description: Databricks workspace URL (dev = FE-VM `fevm-rd-classic`; set host via -p/DATABRICKS_HOST)
+    default: https://fevm-rd-classic.cloud.databricks.com
+  catalog:
+    description: UC catalog for the app's Lakebase-backed data + objects
+    default: rd_classic_catalog
+  schema:
+    description: schema for geniefy objects
+    default: geniefy
+  warehouse_id:
+    description: SQL warehouse for profiling + the apply write-path
+    default: 0336d1a2b47936b4
+  model_endpoint:
+    description: FMAPI Claude serving endpoint used for generation (Reasoner/Judge)
+    default: databricks-claude-sonnet-4-6
+  demo_catalog:
+    description: catalog containing demo tables to document
+    default: samples
+  lakebase_instance:
+    description: Lakebase Autoscaling project name (= `projects/<name>`; provisioned by deploy.sh)
+    default: geniefy
+  pg_host:
+    description: Lakebase endpoint host injected into the app (GENIEFY_PG_HOST). deploy.sh
+      resolves the live endpoint host and passes --var pg_host; this dev default is the
+      `projects/geniefy` production/primary endpoint.
+    default: ep-blue-smoke-d2yetcmv.database.us-east-1.cloud.databricks.com
+
+targets:
+  dev:
+    mode: development
+    default: true
+    # NB: workspace host is intentionally NOT set here — Databricks auth fields cannot use
+    # ${var} interpolation. Provide it via the CLI profile or DATABRICKS_HOST, e.g.
+    #   databricks bundle deploy -t dev -p fe-vm-classic      # profile carries the host
+    #   ./deploy.sh -t dev -p fe-vm-classic                   # (deploy.sh --host exports DATABRICKS_HOST)
+
+  prod:
+    mode: production
+    workspace:
+      # production mode requires an explicit root_path (single-copy guard). Scope it to the
+      # deploying principal's home so it isn't world-writable (the /Workspace/Shared default
+      # triggers a "writable by all users" warning). NB: host/auth still come from the
+      # profile or DATABRICKS_HOST, not here.
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+    # Customer supplies the workspace + auth via their CLI profile (-p) or DATABRICKS_HOST:
+    #   ./deploy.sh -t prod --host https://<workspace> -p <profile>
+    # All other env values are bundle variables, overridable per target or with --var.
+
+resources:
+  apps:
+    geniefy:
+      name: geniefy-${bundle.target}
+      description: "geniefy-v3 — agentic Unity Catalog table documentation (AI/Genie-ready comments)"
+      source_code_path: ./app
+      # Resource bindings → injected into the app as env (U8 §6 / NFR-A). `app.yaml`'s
+      # `valueFrom: sql-warehouse` binds GENIEFY_WAREHOUSE_ID. NB (U77): the app `database`
+      # binding only resolves classic Lakebase *database instances*, NOT Autoscaling projects
+      # (our `projects/geniefy`) — so Lakebase is wired via the `pg_host` var + the backend's
+      # own OAuth (api.py `_lakebase_connection`), and deploy.sh grants the app SP a Postgres
+      # role on the branch (the access the removed binding would have implied).
+      resources:
+        - name: sql-warehouse
+          description: SQL warehouse for profiling + the apply write-path (D25/D7)
+          sql_warehouse:
+            id: ${var.warehouse_id}
+            permission: CAN_USE
+
+  jobs:
+    # One-shot, idempotent migration job (D35 / U8 §7). The bundle-native alternative to
+    # deploy.sh's local migrate step: applies migrations/*.sql to the Lakebase `geniefy`
+    # database via migrations/run_migrations.py. Run after deploy:
+    #   databricks bundle run geniefy_setup -t <target>
+    geniefy_setup:
+      name: geniefy-setup-${bundle.target}
+      description: "Apply migrations/ to the Lakebase geniefy database (idempotent, re-runnable)."
+      # geniefy_setup is migrate-ONLY (D54/U119): the hands-off schema-run Job moved to its own
+      # bundle (jobs-bundle/) so deploying it never reconciles the app's resources (grant-safe).
+      tasks:
+        - task_key: migrate
+          spark_python_task:
+            python_file: ./migrations/run_migrations.py
+            # Migrate the branch the app binds, not always production (U118): run_migrations reads
+            # argv[1] as the branch. deploy.sh --use-job passes the per-target branch via --params.
+            parameters:
+              - "{{job.parameters.lakebase_branch}}"
+          environment_key: migrate
+      environments:
+        - environment_key: migrate
+          spec:
+            client: "2"
+            dependencies:
+              - psycopg2-binary
+      parameters:
+        - name: lakebase_branch
+          default: production

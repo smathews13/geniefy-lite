@@ -1,0 +1,39 @@
+# geniefy-v3 — default comment template ("what good looks like", HLD §7).
+# Authoring format (YAML); seeded into Lakebase `templates.spec` (JSONB) at setup.
+# Teams can clone + version this to enforce their own standard (U4 §3.1).
+name: default
+version: 1
+
+# Richer, steward-facing table comment (D53/Q3): the information a data steward / business
+# owner / data owner — or an agent (Genie) — needs to *interact* with the table. grain = "one
+# row represents ..."; business_definition = the plain-business meaning (vs technical purpose).
+table_comment:
+  required: [purpose, business_definition, grain, primary_keys, join_keys]
+  recommended: [technical_owner, data_owner, freshness_sla, source_systems, downstream_consumers,
+                known_business_rules, known_quality_issues, common_join_patterns, related_tables,
+                sensitivity, example_questions, use_cases, caveats]
+  style:
+    max_words: 900                       # richer steward-facing comment (D53/Q3; was 500)
+    voice: "factual, present tense, no marketing"
+    forbid: ["marketing language", "speculation without signal"]
+
+column_comment:
+  required: [definition]                # business meaning, NOT a restatement of the name
+  conditional:                          # include when the signal applies
+    units:          { when: numeric_measure, rule: "if a numeric measure, state the unit" }
+    allowed_values: { when: enum,            rule: "if an enum, map each value to its meaning" }
+    null_meaning:   { when: nullable,        rule: "if nullable, what NULL signifies" }
+    fk_reference:   { when: fk,              rule: "if a foreign key, give catalog.schema.table.column" }
+    derivation:     { when: computed,        rule: "if computed/derived, the logic" }
+    sensitivity:    { when: pii,             rule: "if PII, note the sensitivity class" }
+  style:
+    max_words: 150                       # richer column meaning (D43/E1; was 40)
+    forbid: ["restating the name", "speculation without signal"]
+
+# The dimensions the Judge scores each draft against (U4 §3.5). Weights sum to 1.0.
+rubric:
+  dimensions:
+    completeness:         { weight: 0.30, desc: "required fields filled, or explicitly marked unknown" }
+    specificity:         { weight: 0.30, desc: "business meaning, not a restatement of the name" }
+    grounding:            { weight: 0.25, desc: "every claim traces to provided evidence; no hallucination" }
+    template_conformance: { weight: 0.15, desc: "style/length/forbidden-pattern compliance" }

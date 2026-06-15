@@ -1,0 +1,112 @@
+# geniefy-jobs — SEPARATE DAB bundle for the hands-off schema-run Job (D54 / U119).
+#
+# Why its own bundle: deploying a job that lives in the APP bundle requires `bundle deploy`, which
+# reconciles the app's `resources` to databricks.yml and WIPES the UI-added geniefy-db + fmapi
+# bindings → drops the SP's Lakebase role + grants (U77/U78/D48). This bundle's only resource is the
+# job, so `bundle deploy` here NEVER touches the app — fully grant-safe. The app keeps using the
+# grant-safe `--code-only` redeploy.
+#
+# Code is STAGED into this dir by ../deploy_jobs.sh (geniefy_core/geniefy_app/schema_run_entry.py
+# copied in, mirroring how deploy.sh stages app/), so the bundle is self-contained — no cross-root sync.
+bundle:
+  name: geniefy-jobs
+
+# Run the Job AS the app SP (D48 consistency, U123): the job reads Lakebase/warehouse/FMAPI with the
+# same identity the app uses, and the SP's oauth-m2m auth supports w.config.oauth_token() on the
+# cluster (the run_as=deployer case used a runtime cred without it → the U113 AttributeError).
+run_as:
+  service_principal_name: bcc7089c-deac-4f42-b125-4e5681c7d8c1
+
+# Bundle-level permissions apply to the resources AND the deployed workspace files (U123): the SP
+# (run_as) must be able to READ the staged entrypoint, which dev-mode deploys under the deployer's
+# home. Granting CAN_MANAGE here gives the SP that file access.
+permissions:
+  - level: CAN_MANAGE
+    service_principal_name: bcc7089c-deac-4f42-b125-4e5681c7d8c1
+
+sync:
+  # The staged core is .gitignored build artifact (like app/) — force-include so it uploads.
+  include:
+    - geniefy_core/**
+    - geniefy_app/**
+    - schema_run_entry.py
+
+variables:
+  warehouse_id:
+    description: SQL warehouse for profiling (SP reads)
+    default: 0336d1a2b47936b4
+  model_endpoint:
+    description: FMAPI Claude serving endpoint for generation
+    default: databricks-claude-sonnet-4-6
+  pg_host:
+    description: Lakebase endpoint host the app binds (the DEV branch — must match the app, U117)
+    default: ep-curly-sunset-d2sz2asi.database.us-east-1.cloud.databricks.com
+  pg_database:
+    default: geniefy
+  lakebase_endpoint:
+    description: Lakebase endpoint PATH for minting the cluster DB credential (must be pg_host's branch, U123)
+    default: projects/geniefy/branches/dev/endpoints/primary
+
+targets:
+  dev:
+    mode: development
+    default: true
+  prod:
+    mode: production
+    workspace:
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/geniefy-jobs/prod
+
+resources:
+  jobs:
+    geniefy_schema_run:
+      name: geniefy-schema-run-${bundle.target}
+      description: "Hands-off schema documentation — enumerate a schema + generate per table (NEVER applies to UC; D51/Q7)."
+      # The app SP triggers this job (POST /api/schema-runs → run_now), so it needs run access to
+      # resolve + run it (U121, surfaced at U113). Declared here so every deploy re-applies it.
+      # (run_as defaults to the deployer — has access; run_as=<SP> is the prod refinement.)
+      permissions:
+        - level: CAN_MANAGE_RUN
+          service_principal_name: bcc7089c-deac-4f42-b125-4e5681c7d8c1
+      tasks:
+        - task_key: schema_run
+          spark_python_task:
+            python_file: ./schema_run_entry.py
+            parameters:
+              - "{{job.parameters.schema_run_id}}"
+              - "{{job.parameters.catalog}}"
+              - "{{job.parameters.schema}}"
+              - "{{job.parameters.filters}}"
+              - "{{job.parameters.model_endpoint}}"
+              - "{{job.parameters.warehouse_id}}"
+              - "{{job.parameters.pg_host}}"
+              - "{{job.parameters.pg_database}}"
+              - "{{job.parameters.lakebase_endpoint}}"
+          environment_key: schema_run
+      environments:
+        - environment_key: schema_run
+          spec:
+            client: "2"
+            dependencies:
+              - psycopg2-binary
+              - databricks-sdk
+              - openai
+              - pyyaml
+      parameters:
+        - name: schema_run_id
+          default: ""
+        - name: catalog
+          default: ""
+        - name: schema
+          default: ""
+        - name: filters
+          default: "{}"
+        - name: model_endpoint
+          default: ${var.model_endpoint}
+        - name: warehouse_id
+          default: ${var.warehouse_id}
+        - name: pg_host
+          default: ${var.pg_host}
+        - name: pg_database
+          default: geniefy
+        - name: lakebase_endpoint
+          default: ${var.lakebase_endpoint}
