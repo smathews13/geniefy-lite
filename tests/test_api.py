@@ -501,14 +501,17 @@ def test_enumerate_tables_requires_sql_runner():
 
 
 def test_enumerate_tables_excludes_internal_by_default():
-    # U124: internal/materialization artifacts (table_name like '__…') are filtered unless opted in.
+    # U124/U138: internal/materialization artifacts (table_name like '__…') are filtered unless opted
+    # in. U138: use `left(table_name, 2) <> '__'` — the prior `LIKE '\_\_%' ESCAPE '\'` was invalid
+    # Databricks SQL (parse error → silently enumerated nothing on the real warehouse).
     captured: list[str] = []
     _, _, svc = _client(sql_runner=_fake_enum_runner(captured))
     svc.enumerate_tables("cat", "sch")
-    assert "NOT LIKE" in captured[0] and "ESCAPE" in captured[0]   # the '__%' exclusion is in the SQL
+    assert "left(table_name, 2) <> '__'" in captured[0]   # the '__' prefix exclusion is in the SQL
+    assert "ESCAPE" not in captured[0]                     # no fragile LIKE-ESCAPE (U138)
     captured.clear()
     svc.enumerate_tables("cat", "sch", {"include_internal": True})
-    assert "NOT LIKE" not in captured[0]                            # opt-in surfaces them
+    assert "left(table_name, 2) <> '__'" not in captured[0]   # opt-in surfaces them
 
 
 def test_run_hands_off_persists_with_run_id_and_returns_kind():

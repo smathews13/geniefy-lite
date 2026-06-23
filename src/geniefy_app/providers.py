@@ -170,6 +170,18 @@ def _try_cast(fn: Callable[[Any], Any], v: Any) -> Any:
 def _rows_from_statement_response(resp: Any) -> list[dict[str, Any]]:
     """Map a Statement Execution response (manifest columns + ``data_array``) to row dicts,
     type-coercing numeric columns (the API returns every value as a string)."""
+    # A FAILED statement must raise, not look like an empty result set (U139). The API returns
+    # status.state=FAILED (e.g. a SQL parse or permission error) with result=None — extracting rows
+    # blindly would yield [] and silently mask the error (the bug that hid the U138 parse error and
+    # made the schema-run Job "succeed" with total=0). SUCCEEDED / absent-status are unaffected.
+    status = getattr(resp, "status", None)
+    state = getattr(status, "state", None)
+    state_name = (getattr(state, "value", None) or getattr(state, "name", None)
+                  or (str(state) if state is not None else None))
+    if state_name in ("FAILED", "CANCELED", "CLOSED"):
+        err = getattr(status, "error", None)
+        msg = getattr(err, "message", None) or state_name
+        raise RuntimeError(f"SQL statement {state_name}: {msg}")
     manifest = getattr(resp, "manifest", None)
     schema = getattr(manifest, "schema", None) if manifest else None
     sch_cols = list(schema.columns) if schema and schema.columns else []

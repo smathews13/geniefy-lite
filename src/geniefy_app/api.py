@@ -262,9 +262,11 @@ class SessionService:
         sql = (f"SELECT table_name, comment FROM {_q_ident(catalog)}.information_schema.tables "
                f"WHERE table_schema = {_q_lit(schema)} AND table_type IN ('MANAGED','EXTERNAL')")
         # Skip internal / system artifacts (e.g. metric-view `__materialization_mat_*` tables, U124)
-        # unless the caller opts in. `_` is a LIKE wildcard, so escape it to match a literal `__`.
+        # unless the caller opts in. Use left() rather than `LIKE '\_\_%' ESCAPE '\'`: a lone backslash
+        # in the `'\'` literal escapes the closing quote in Databricks SQL → PARSE_SYNTAX_ERROR, which
+        # (combined with the swallowed-failure bug) silently enumerated 0 tables (U138 live fix).
         if not filters.get("include_internal", False):
-            sql += r" AND table_name NOT LIKE '\_\_%' ESCAPE '\'"
+            sql += " AND left(table_name, 2) <> '__'"
         name_like = filters.get("name_like")
         if name_like:
             sql += f" AND table_name LIKE {_q_lit(str(name_like))}"

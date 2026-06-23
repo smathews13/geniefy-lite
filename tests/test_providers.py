@@ -161,6 +161,28 @@ def test_sql_execute_mints_fresh_client_per_call(monkeypatch):
     assert len(built) == 2             # one fresh client (+ token) per call — not cached (U98)
 
 
+def test_rows_from_statement_response_raises_on_failed_statement():
+    # U139: a FAILED statement (SQL parse/permission error, result=None) must RAISE — not silently
+    # return [] (the bug that masked U138's bad enumerate query → Job "succeeded" with total=0).
+    import types
+
+    from geniefy_app.providers import _rows_from_statement_response
+
+    failed = types.SimpleNamespace(
+        manifest=None, result=None,
+        status=types.SimpleNamespace(
+            state=types.SimpleNamespace(value="FAILED"),
+            error=types.SimpleNamespace(message="[PARSE_SYNTAX_ERROR] near 'ESCAPE'")))
+    with pytest.raises(RuntimeError, match="FAILED"):
+        _rows_from_statement_response(failed)
+    # a SUCCEEDED statement with no rows is a legitimate empty result (returns [])
+    ok = types.SimpleNamespace(manifest=None, result=None,
+                               status=types.SimpleNamespace(state=types.SimpleNamespace(value="SUCCEEDED")))
+    assert _rows_from_statement_response(ok) == []
+    # absent status (hermetic fakes that don't model status) → no raise, empty rows
+    assert _rows_from_statement_response(types.SimpleNamespace(manifest=None, result=None)) == []
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Cross-runtime auth helpers (U123) — App (oauth_token) vs Job cluster (authenticate / mint)
 # ─────────────────────────────────────────────────────────────────────────────
