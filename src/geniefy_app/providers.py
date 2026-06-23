@@ -176,23 +176,34 @@ def _statement_state(resp: Any) -> str | None:
 
 
 def _await_terminal(w: Any, resp: Any, *, poll_seconds: float = 2.0, max_polls: int = 150) -> Any:
-    """Poll ``get_statement`` until the statement leaves PENDING/RUNNING (U145). ``execute_statement``
+    """Poll ``get_statement`` until the statement leaves PENDING/RUNNING (U145/U146). ``execute_statement``
     waits only up to ``wait_timeout`` (the API max is 50s); a slower statement (e.g. a large-table
     profile) returns a non-terminal status, which ``_rows_from_statement_response`` would otherwise
     treat as an empty result — the same silent-[] masking as the U139 FAILED bug, for slow queries.
     Returns the terminal response (the FAILED check stays in ``_rows_from_statement_response``).
-    Capped at ``max_polls`` to avoid an unbounded loop; absent-status (hermetic fakes) returns at once."""
+
+    The poll budget is ``poll_seconds × max_polls`` (default ≈ 5 min). This is a deliberate
+    **hang-guard, not an SLA** (U147): warehouse statements (profiling / enumeration / lineage) normally
+    finish inside the 50s synchronous wait, so this loop is the rare long-statement path; one still
+    non-terminal past the budget is treated as **stuck** and raised — failing loud, never a silent ``[]``.
+    A terminal or absent-status response returns at once without polling; a non-terminal response that
+    carries no ``statement_id`` can't be polled, so it raises a clear error rather than ``get_statement(None)``."""
     import time
 
-    polls = 0
-    while _statement_state(resp) in ("PENDING", "RUNNING"):
-        if polls >= max_polls:
-            sid = getattr(resp, "statement_id", None)
-            raise RuntimeError(f"SQL statement did not reach a terminal state after {max_polls} polls "
-                               f"(statement_id={sid})")
+    for _ in range(max_polls):
+        if _statement_state(resp) not in ("PENDING", "RUNNING"):
+            return resp
+        sid = getattr(resp, "statement_id", None)
+        if not sid:
+            raise RuntimeError("SQL statement is non-terminal but carries no statement_id — cannot poll "
+                               "for completion")
         time.sleep(poll_seconds)
-        polls += 1
-        resp = w.statement_execution.get_statement(getattr(resp, "statement_id", None))
+        resp = w.statement_execution.get_statement(sid)
+    if _statement_state(resp) in ("PENDING", "RUNNING"):  # budget exhausted, still not terminal → stuck
+        raise RuntimeError(
+            f"SQL statement did not reach a terminal state within the poll budget "
+            f"(~{int(poll_seconds * max_polls)}s = {max_polls}×{poll_seconds}s); "
+            f"statement_id={getattr(resp, 'statement_id', None)}")
     return resp
 
 

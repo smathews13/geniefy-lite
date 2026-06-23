@@ -233,6 +233,22 @@ def test_await_terminal_noop_when_already_terminal_or_no_status():
     assert _await_terminal(w, absent, poll_seconds=0) is absent
 
 
+def test_await_terminal_raises_on_nonterminal_without_statement_id():
+    # U147: a PENDING/RUNNING response that carries no statement_id can't be polled — raise a clear
+    # error rather than calling get_statement(None).
+    import types
+
+    from geniefy_app.providers import _await_terminal
+
+    def boom(sid):
+        raise AssertionError("get_statement(None) must not be called")
+
+    w = types.SimpleNamespace(statement_execution=types.SimpleNamespace(get_statement=boom))
+    stuck = types.SimpleNamespace(statement_id=None, status=types.SimpleNamespace(state="RUNNING"))
+    with pytest.raises(RuntimeError, match="statement_id"):
+        _await_terminal(w, stuck, poll_seconds=0, max_polls=5)
+
+
 def test_sql_execute_polls_running_on_the_sp_runner(monkeypatch):
     # U146 (regression guard for the U145 HIGH): databricks_sql_execute — the SP READ runner used by
     # enumeration/profiling/lineage — must poll a RUNNING statement to terminal, not return []. The
