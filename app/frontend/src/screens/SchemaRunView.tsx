@@ -1,7 +1,68 @@
 import { useState } from 'react'
-import { useCancelSchemaRun, useSchemaRun, useSchemaRuns, useStartSchemaRun } from '../api/hooks'
+import {
+  useApproveTableInRun,
+  useCancelSchemaRun,
+  useSchemaRun,
+  useSchemaRuns,
+  useStartSchemaRun,
+} from '../api/hooks'
 import { cn } from '../lib/cn'
-import type { SchemaRun, SchemaRunStatus } from '../api/types'
+import type { SchemaRun, SchemaRunStatus, SessionSummary } from '../api/types'
+
+/** One table row in a schema run: open it, see its overall confidence, or bulk-approve its
+ * high-confidence drafts in place (LLD-amend-007 §4). Bulk-approve never writes to UC (approve != apply). */
+function SchemaTableRow({
+  s,
+  runId,
+  onOpen,
+}: {
+  s: SessionSummary
+  runId: string
+  onOpen: (sessionId: string) => void
+}) {
+  const approve = useApproveTableInRun(s.session_id, runId)
+  const cs = s.confidence_summary
+  const n = cs?.approvable ?? 0
+  return (
+    <li className="flex items-center gap-2 rounded-lg border border-slate-100 p-2.5 transition hover:bg-slate-50">
+      <button
+        type="button"
+        onClick={() => onOpen(s.session_id)}
+        className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left"
+        title="Open this table to review / answer questions / apply"
+      >
+        <span className="truncate font-mono text-sm text-slate-700">{s.target}</span>
+        <span className="flex shrink-0 items-center gap-2 text-xs text-slate-500">
+          {cs?.overall != null && (
+            <span
+              className="font-medium text-slate-600"
+              title={`${cs.review_ready} review-ready · ${cs.needs_input} need input · ${cs.low} low`}
+            >
+              {Math.round(cs.overall * 100)}% conf
+            </span>
+          )}
+          <span>
+            {s.status.replace(/_/g, ' ')}
+            {s.n_applied ? ` · ${s.n_applied} applied` : ''}
+          </span>
+        </span>
+      </button>
+      <button
+        type="button"
+        onClick={() => approve.mutate()}
+        disabled={!n || approve.isPending}
+        className="shrink-0 rounded-md border border-confidence-high px-2 py-1 text-xs font-medium text-confidence-high transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300"
+        title={
+          n
+            ? "Approve this table's high-confidence drafts (does not write to Unity Catalog)"
+            : 'No high-confidence drafts to approve'
+        }
+      >
+        {approve.isPending ? 'Approving…' : `Approve ${n}`}
+      </button>
+    </li>
+  )
+}
 
 const RUN_BADGE: Record<SchemaRunStatus, string> = {
   enumerating: 'bg-indigo-100 text-indigo-700',
@@ -156,19 +217,7 @@ function SchemaRunDetail({ runId, onBack, onOpen }: {
         )}
         <ul className="mt-2 space-y-1.5">
           {sessions.map((s) => (
-            <li key={s.session_id}>
-              <button
-                type="button"
-                onClick={() => onOpen(s.session_id)}
-                className="flex w-full items-center justify-between gap-2 rounded-lg border border-slate-100 p-2.5 text-left transition hover:bg-slate-50"
-                title="Open this table to review / answer questions / apply"
-              >
-                <span className="truncate font-mono text-sm text-slate-700">{s.target}</span>
-                <span className="shrink-0 text-xs text-slate-500">
-                  {s.status.replace(/_/g, ' ')}{s.n_applied ? ` · ${s.n_applied} applied` : ''}
-                </span>
-              </button>
-            </li>
+            <SchemaTableRow key={s.session_id} s={s} runId={runId} onOpen={onOpen} />
           ))}
         </ul>
       </div>

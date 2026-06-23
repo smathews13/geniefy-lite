@@ -423,6 +423,7 @@ def test_confidence_summary_rollup_buckets_and_weakest():
     # overall = 0.5*0.9 + 0.5*mean(0.95,0.5,0.6,0.8) = 0.45 + 0.35625 = 0.80625
     assert abs(s["overall"] - 0.80625) < 1e-9
     assert s["review_ready"] == 3                       # table + a + d (≥0.75, unflagged)
+    assert s["approvable"] == 3                          # table + a + d are draft & ≥0.75 (U157 button count)
     assert s["needs_input"] == 1 and s["low"] == 1
     assert s["weakest"] == {"target": "b", "confidence": 0.5}   # lowest confidence, even though flagged
 

@@ -122,6 +122,7 @@ def _confidence_summary(state: SessionState) -> dict[str, Any]:
         "review_ready": review_ready,
         "needs_input": sum(1 for _, d in drafts if d.status == DraftStatus.NEEDS_INPUT),
         "low": sum(1 for _, d in drafts if d.status == DraftStatus.LOW_CONFIDENCE),
+        "approvable": len(_high_confidence_targets(state)),  # exact count the per-table button approves (U157)
         "weakest": {"target": weakest[0], "confidence": weakest[1]} if weakest else None,
     }
 

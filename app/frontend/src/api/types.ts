@@ -99,7 +99,17 @@ export interface SessionView {
   profile?: ProfileView
 }
 
-// History list rows (E6) — GET /api/sessions → { sessions: SessionSummary[] }
+// Per-table confidence rollup (LLD-amend-007 §2/§4) — attached to schema-run sessions by the server.
+export interface ConfidenceSummary {
+  overall: number | null
+  review_ready: number
+  needs_input: number
+  low: number
+  approvable: number // count of draft & >=keep_threshold drafts the bulk-approve would act on
+  weakest: { target: string; confidence: number } | null
+}
+
+// History list rows (E6) — GET /api/sessions -> { sessions: SessionSummary[] }
 export interface SessionSummary {
   session_id: string
   target: string
@@ -109,6 +119,7 @@ export interface SessionSummary {
   updated_at: string
   n_columns: number
   n_applied: number
+  confidence_summary?: ConfidenceSummary | null // present on schema-run sessions (U155/U157)
 }
 
 // Comment-library rows (E6/D52) — GET /api/library → { entries: LibraryEntry[] }

@@ -148,6 +148,26 @@ export function useApply(sessionId: string) {
   )
 }
 
+/** Bulk-approve the high-confidence, unflagged drafts (LLD-amend-007 §3 / D59). The server selects
+ * (status=draft & confidence>=keep_threshold); flagged drafts are left for explicit review, and
+ * nothing is written to UC (approve != apply). Invalidates the session so the UI reflects approvals. */
+export function useApproveHighConfidence(sessionId: string) {
+  return useSessionMutation<void>(sessionId, () =>
+    jsonFetch(`/api/sessions/${sessionId}/approve-high-confidence`, { method: 'POST' }),
+  )
+}
+
+/** Per-table bulk-approve from the hands-off Schema view (LLD-amend-007 §4): approve a table's
+ * high-confidence drafts WITHOUT opening it, then refresh the run so its rows update. Never applies. */
+export function useApproveTableInRun(sessionId: string, runId: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () =>
+      jsonFetch(`/api/sessions/${sessionId}/approve-high-confidence`, { method: 'POST' }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['schema-run', runId] }),
+  })
+}
+
 // ── Hands-off schema runs (D51) ────────────────────────────────────────────
 /** Recent schema runs (newest first). */
 export function useSchemaRuns(params: { limit?: number; offset?: number } = {}) {
