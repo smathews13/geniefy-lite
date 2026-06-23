@@ -686,5 +686,11 @@ role there. **Trade-off:** the dev branch's prior session/library data is left b
 a clean migrated schema) — acceptable, it was throwaway test data and "sustained going forward" is the goal.
 `databricks.yml`'s `pg_host` var default was already the production endpoint, so it needs no change.
 
+## D58 — Frontend stack: raw Tailwind + hand-rolled primitives supersede D31's shadcn (audit-sweep resolution)
+
+**Date:** 2026-06-23 · **Scope:** project (frontend stack) · **Status:** locked · **Grounded in:** U56-U58 audit, human "address all the audit findings"
+
+**Decision.** D31/LLD-frontend §1 named the stack as "Tailwind/**shadcn**", but the SPA was built (R1→R4, live-verified) entirely with **raw Tailwind + small hand-rolled primitives** (`components/Pill.tsx`, the viz primitives, the screen components) — **shadcn/ui (and its radix deps) were never vendored.** This decision ratifies that as the **intended** stack rather than a defect: vendoring shadcn into a working, live-verified UI now would be pure styling-convention churn (re-skinning components that already render and behave correctly) with **zero functional gain** and real regression risk. The U56-U58 audit explicitly offered this as a valid resolution ("either vendor shadcn **OR** record a decision that raw Tailwind supersedes the shadcn part of D31"). **Why:** the deliverable is a working, governed documentation app; the component library is an implementation detail, and the hand-rolled primitives are lighter and already proven. **The other half of §7's FE gate — `eslint` — IS being added** (U152), so the lint gate the design called for is honored. If a future contributor wants shadcn, that's a deliberate, separately-scoped migration, not an open audit finding. Supersedes the "shadcn" clause of D31 only; the rest of the frontend stack (Vite·React·TS·Tailwind·TanStack Query·visx/Recharts) stands.
+
 <!-- Append new decisions below this line. -->
 
