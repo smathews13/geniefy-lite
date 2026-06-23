@@ -181,16 +181,23 @@ class SessionStore:
         independent of the per-session transaction."""
         s = self._schema
         with self._connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    f"""
-                    INSERT INTO {s}.audit_log
-                      (session_id, draft_kind, draft_id, action, actor, before, after)
-                    VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s::jsonb)
-                    """,
-                    (session_id, draft_kind, draft_id, action, actor, _jsonb(before), _jsonb(after)),
-                )
-            conn.commit()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        f"""
+                        INSERT INTO {s}.audit_log
+                          (session_id, draft_kind, draft_id, action, actor, before, after)
+                        VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s::jsonb)
+                        """,
+                        (session_id, draft_kind, draft_id, action, actor, _jsonb(before), _jsonb(after)),
+                    )
+                conn.commit()
+            except Exception:  # rollback parity with save/upsert_library_entry (U93/U148)
+                try:
+                    conn.rollback()
+                except Exception:  # a dropped conn can't roll back — don't mask the real error
+                    pass
+                raise
 
     # -- load ---------------------------------------------------------------
     def load(self, session_id: str) -> SessionState | None:
@@ -216,7 +223,7 @@ class SessionStore:
         Each row: session_id · target · status · created_by · created/updated · column +
         applied counts. Optional filters: ``status``, the fully-qualified ``table``
         (``catalog.schema.table``), and ``schema_run_id`` (a hands-off run's per-table sessions,
-        D51/U109). Read-only; reuses the shared connection."""
+        D51/U109). Read-only; uses a per-operation connection (D49)."""
         s = self._schema
         limit = max(1, min(int(limit), 200))   # clamp defensively
         offset = max(0, int(offset))

@@ -242,14 +242,18 @@ class SessionService:
         triggered (D48 attribution); the Job itself runs as the app SP. Returns ``{schema_run_id}``."""
         run_id = self.store.create_schema_run(catalog=catalog, schema=schema,
                                               created_by=created_by, filters=filters or {})
-        if self.run_schema_job is not None:
-            try:
-                job_run_id = self.run_schema_job(run_id, catalog, schema, filters or {})
-            except Exception as exc:
-                self.store.finalize_schema_run(run_id, status="failed")
-                raise SessionError(502, f"failed to trigger schema-run job: {exc}")
-            if job_run_id is not None:
-                self.store.update_schema_run(run_id, status="running", job_run_id=int(job_run_id))
+        if self.run_schema_job is None:  # U110: no job mechanism → don't leave the record stuck at 'enumerating'
+            self.store.finalize_schema_run(run_id, status="failed")
+            raise SessionError(501, "schema-run job not wired (no run_schema_job)")
+        try:
+            job_run_id = self.run_schema_job(run_id, catalog, schema, filters or {})
+        except Exception as exc:
+            self.store.finalize_schema_run(run_id, status="failed")
+            raise SessionError(502, f"failed to trigger schema-run job: {exc}")
+        if job_run_id is None:  # U110: triggered but no run id → mark failed, don't leave 'enumerating'
+            self.store.finalize_schema_run(run_id, status="failed")
+            raise SessionError(502, "schema-run job triggered but returned no run id; run not started")
+        self.store.update_schema_run(run_id, status="running", job_run_id=int(job_run_id))
         return {"schema_run_id": run_id}
 
     def enumerate_tables(self, catalog: str, schema: str,

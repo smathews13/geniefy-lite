@@ -137,12 +137,6 @@ class ChatTransport(Protocol):
     ) -> Mapping[str, Any]: ...
 
 
-# Transient transport errors worth retrying (the concrete transport raises these or the
-# client treats any non-LLMError exception as transient up to max_retries).
-class TransportError(Exception):
-    pass
-
-
 def _retry_after_seconds(exc: Exception) -> float | None:
     """Extract a ``Retry-After`` (seconds) from a rate-limit error if the transport exposes one
     — e.g. ``openai.RateLimitError`` carries ``.response.headers['retry-after']``. Hermetic: we

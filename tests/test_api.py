@@ -479,6 +479,24 @@ def test_start_schema_run_job_failure_marks_failed_502():
     c, store, _ = _client(run_schema_job=boom)
     r = c.post("/api/schema-runs", json={"catalog": "cat", "schema": "sch"})
     assert r.status_code == 502
+
+
+def test_start_schema_run_no_run_id_marks_failed_502():
+    # U110/U148: trigger returns no run id → record marked failed (not left at 'enumerating'), 502
+    c, store, _ = _client(run_schema_job=lambda *a: None)
+    r = c.post("/api/schema-runs", json={"catalog": "cat", "schema": "sch"})
+    assert r.status_code == 502
+    rid = next(iter(store.schema_runs))
+    assert store.schema_runs[rid]["status"] == "failed"   # honest status, not stuck at 'enumerating'
+
+
+def test_start_schema_run_no_job_wired_marks_failed_501():
+    # U110/U148: no run_schema_job mechanism → 501 + record marked failed, never left 'enumerating'
+    c, store, _ = _client()  # run_schema_job=None
+    r = c.post("/api/schema-runs", json={"catalog": "cat", "schema": "sch"})
+    assert r.status_code == 501
+    rid = next(iter(store.schema_runs))
+    assert store.schema_runs[rid]["status"] == "failed"
     assert list(store.schema_runs.values())[0]["status"] == "failed"
 
 
