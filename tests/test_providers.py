@@ -183,6 +183,94 @@ def test_rows_from_statement_response_raises_on_failed_statement():
     assert _rows_from_statement_response(types.SimpleNamespace(manifest=None, result=None)) == []
 
 
+def test_await_terminal_polls_running_until_terminal():
+    # U145: a PENDING/RUNNING statement is polled via get_statement until terminal — not treated as []
+    import types
+
+    from geniefy_app.providers import _await_terminal, _rows_from_statement_response
+
+    running = types.SimpleNamespace(statement_id="s1", status=types.SimpleNamespace(state="RUNNING"))
+    done = types.SimpleNamespace(statement_id="s1", manifest=None, result=None,
+                                 status=types.SimpleNamespace(state="SUCCEEDED"))
+    calls = {"n": 0}
+
+    def get_statement(sid):
+        calls["n"] += 1
+        return done
+
+    w = types.SimpleNamespace(statement_execution=types.SimpleNamespace(get_statement=get_statement))
+    out = _await_terminal(w, running, poll_seconds=0, max_polls=5)
+    assert calls["n"] == 1                                # polled once, to terminal
+    assert _rows_from_statement_response(out) == []       # SUCCEEDED → rows (empty here), not masked
+
+
+def test_await_terminal_gives_up_on_stuck_statement():
+    # U145: a statement stuck non-terminal raises after max_polls — never an unbounded loop or silent []
+    import types
+
+    from geniefy_app.providers import _await_terminal
+
+    running = types.SimpleNamespace(statement_id="s2", status=types.SimpleNamespace(state="RUNNING"))
+    w = types.SimpleNamespace(
+        statement_execution=types.SimpleNamespace(get_statement=lambda sid: running))
+    with pytest.raises(RuntimeError, match="terminal"):
+        _await_terminal(w, running, poll_seconds=0, max_polls=3)
+
+
+def test_await_terminal_noop_when_already_terminal_or_no_status():
+    # already-terminal or absent-status (hermetic fakes) → returned at once; get_statement NOT called
+    import types
+
+    from geniefy_app.providers import _await_terminal
+
+    def boom(sid):
+        raise AssertionError("get_statement must not be called for a terminal/absent-status response")
+
+    w = types.SimpleNamespace(statement_execution=types.SimpleNamespace(get_statement=boom))
+    succeeded = types.SimpleNamespace(status=types.SimpleNamespace(state="SUCCEEDED"))
+    assert _await_terminal(w, succeeded, poll_seconds=0) is succeeded
+    absent = types.SimpleNamespace(manifest=None, result=None)  # no status — like the mint-per-call fake
+    assert _await_terminal(w, absent, poll_seconds=0) is absent
+
+
+def test_sql_execute_polls_running_on_the_sp_runner(monkeypatch):
+    # U146 (regression guard for the U145 HIGH): databricks_sql_execute — the SP READ runner used by
+    # enumeration/profiling/lineage — must poll a RUNNING statement to terminal, not return []. The
+    # U145 fix wired only the OBO runner; this test fails if the SP runner loses its _await_terminal.
+    import sys
+    import time as _time
+    import types
+
+    monkeypatch.setattr(_time, "sleep", lambda *a, **k: None)  # no real sleep on the poll path
+
+    running = types.SimpleNamespace(statement_id="s9", status=types.SimpleNamespace(state="RUNNING"))
+    done = types.SimpleNamespace(statement_id="s9", manifest=None, result=None,
+                                 status=types.SimpleNamespace(state="SUCCEEDED"))
+    gets = {"n": 0}
+
+    def get_statement(sid):
+        gets["n"] += 1
+        return done
+
+    class _FakeWC:
+        def __init__(self, **kw):
+            self.statement_execution = types.SimpleNamespace(
+                execute_statement=lambda **k: running, get_statement=get_statement)
+
+    fake_sdk = types.ModuleType("databricks.sdk")
+    fake_sdk.WorkspaceClient = _FakeWC
+    fake_pkg = types.ModuleType("databricks")
+    fake_pkg.sdk = fake_sdk
+    monkeypatch.setitem(sys.modules, "databricks", fake_pkg)
+    monkeypatch.setitem(sys.modules, "databricks.sdk", fake_sdk)
+
+    from geniefy_app.providers import databricks_sql_execute
+
+    rows = databricks_sql_execute(warehouse_id="wh")("SELECT 1")
+    assert gets["n"] == 1     # the SP runner polled the RUNNING statement to a terminal state
+    assert rows == []         # terminal SUCCEEDED mapped (empty here) — NOT a silent [] from RUNNING
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Cross-runtime auth helpers (U123) — App (oauth_token) vs Job cluster (authenticate / mint)
 # ─────────────────────────────────────────────────────────────────────────────

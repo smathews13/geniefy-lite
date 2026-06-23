@@ -167,6 +167,35 @@ def _try_cast(fn: Callable[[Any], Any], v: Any) -> Any:
         return v
 
 
+def _statement_state(resp: Any) -> str | None:
+    """The Statement Execution status state as a plain string (e.g. ``"SUCCEEDED"``), robust to the
+    SDK enum (``.value``/``.name``), a bare string, or an absent status (→ ``None``)."""
+    state = getattr(getattr(resp, "status", None), "state", None)
+    return (getattr(state, "value", None) or getattr(state, "name", None)
+            or (str(state) if state is not None else None))
+
+
+def _await_terminal(w: Any, resp: Any, *, poll_seconds: float = 2.0, max_polls: int = 150) -> Any:
+    """Poll ``get_statement`` until the statement leaves PENDING/RUNNING (U145). ``execute_statement``
+    waits only up to ``wait_timeout`` (the API max is 50s); a slower statement (e.g. a large-table
+    profile) returns a non-terminal status, which ``_rows_from_statement_response`` would otherwise
+    treat as an empty result — the same silent-[] masking as the U139 FAILED bug, for slow queries.
+    Returns the terminal response (the FAILED check stays in ``_rows_from_statement_response``).
+    Capped at ``max_polls`` to avoid an unbounded loop; absent-status (hermetic fakes) returns at once."""
+    import time
+
+    polls = 0
+    while _statement_state(resp) in ("PENDING", "RUNNING"):
+        if polls >= max_polls:
+            sid = getattr(resp, "statement_id", None)
+            raise RuntimeError(f"SQL statement did not reach a terminal state after {max_polls} polls "
+                               f"(statement_id={sid})")
+        time.sleep(poll_seconds)
+        polls += 1
+        resp = w.statement_execution.get_statement(getattr(resp, "statement_id", None))
+    return resp
+
+
 def _rows_from_statement_response(resp: Any) -> list[dict[str, Any]]:
     """Map a Statement Execution response (manifest columns + ``data_array``) to row dicts,
     type-coercing numeric columns (the API returns every value as a string)."""
@@ -174,11 +203,9 @@ def _rows_from_statement_response(resp: Any) -> list[dict[str, Any]]:
     # status.state=FAILED (e.g. a SQL parse or permission error) with result=None — extracting rows
     # blindly would yield [] and silently mask the error (the bug that hid the U138 parse error and
     # made the schema-run Job "succeed" with total=0). SUCCEEDED / absent-status are unaffected.
-    status = getattr(resp, "status", None)
-    state = getattr(status, "state", None)
-    state_name = (getattr(state, "value", None) or getattr(state, "name", None)
-                  or (str(state) if state is not None else None))
+    state_name = _statement_state(resp)
     if state_name in ("FAILED", "CANCELED", "CLOSED"):
+        status = getattr(resp, "status", None)
         err = getattr(status, "error", None)
         msg = getattr(err, "message", None) or state_name
         raise RuntimeError(f"SQL statement {state_name}: {msg}")
@@ -207,7 +234,7 @@ def databricks_sql_execute(*, warehouse_id: str, profile: str | None = None, wai
         resp = w.statement_execution.execute_statement(
             warehouse_id=warehouse_id, statement=sql, wait_timeout=wait_timeout
         )
-        return _rows_from_statement_response(resp)
+        return _rows_from_statement_response(_await_terminal(w, resp))  # poll slow statements (U145/U146)
 
     return execute
 
@@ -236,7 +263,7 @@ def make_obo_sql_execute(
             resp = w.statement_execution.execute_statement(
                 warehouse_id=warehouse_id, statement=sql, wait_timeout=wait_timeout
             )
-            return _rows_from_statement_response(resp)
+            return _rows_from_statement_response(_await_terminal(w, resp))
 
         return execute
 
