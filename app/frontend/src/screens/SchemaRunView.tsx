@@ -33,14 +33,16 @@ function SchemaTableRow({
       >
         <span className="truncate font-mono text-sm text-slate-700">{s.target}</span>
         <span className="flex shrink-0 items-center gap-2 text-xs text-slate-500">
-          {cs?.overall != null && (
-            <span
-              className="font-medium text-slate-600"
-              title={`${cs.review_ready} review-ready · ${cs.needs_input} need input · ${cs.low} low`}
-            >
-              {Math.round(cs.overall * 100)}% conf
-            </span>
-          )}
+          <span
+            className="font-medium text-slate-600"
+            title={
+              cs
+                ? `${cs.review_ready} review-ready · ${cs.needs_input} need input · ${cs.low} low`
+                : 'No confidence yet (not reviewable)'
+            }
+          >
+            {cs?.overall != null ? `${Math.round(cs.overall * 100)}% conf` : '— conf'}
+          </span>
           <span>
             {s.status.replace(/_/g, ' ')}
             {s.n_applied ? ` · ${s.n_applied} applied` : ''}
@@ -192,7 +194,7 @@ function SchemaRunDetail({ runId, onBack, onOpen }: {
               <button
                 type="button"
                 onClick={() => cancel.mutate(runId)}
-                disabled={cancel.isPending}
+                disabled={cancel.isPending || cancel.isSuccess}
                 className="rounded border border-slate-300 px-2 py-0.5 text-xs text-slate-600 hover:bg-slate-100 disabled:opacity-40"
               >
                 Cancel

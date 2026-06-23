@@ -76,6 +76,9 @@ class SessionError(Exception):
 
 
 _TABLE_TARGET = "__table__"
+# Session statuses whose drafts are stable enough to roll up a confidence_summary (U159): only the
+# reviewable terminal states. In-progress / failed sessions have no settled drafts to summarize.
+_CONFIDENCE_REVIEWABLE = {"ready_for_review", "awaiting_input"}
 
 
 def _all_drafts(state: SessionState) -> list[tuple[str, Any]]:
@@ -388,12 +391,13 @@ class SessionService:
             return None
         sessions = self.store.list_sessions(schema_run_id=run_id, limit=200)
         # Attach a per-table confidence_summary (LLD-amend-007 §4) so the Schema view shows per-table
-        # confidence + bulk-approve counts without opening each table. v1 loads each session to reuse
-        # the one rollup helper; if runs get very large this should move to a SQL aggregate or a
-        # summary persisted at generation time (perf follow-on).
+        # confidence + bulk-approve counts without opening each table. Only the REVIEWABLE sessions are
+        # loaded + summarized (U159, closing the U155 perf LOW): in-progress / failed sessions have no
+        # stable drafts, so summarizing them is both wasteful (an O(all-sessions) load each poll tick)
+        # and misleading. A larger fleet could move this to a SQL aggregate / persisted summary.
         for s in sessions:
             sid = s.get("session_id") or s.get("id")
-            st = self.store.load(sid) if sid else None
+            st = self.store.load(sid) if (sid and s.get("status") in _CONFIDENCE_REVIEWABLE) else None
             s["confidence_summary"] = _confidence_summary(st) if st is not None else None
         run["sessions"] = sessions
         return run

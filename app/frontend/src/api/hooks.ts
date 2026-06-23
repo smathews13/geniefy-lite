@@ -205,9 +205,10 @@ export function useCancelSchemaRun() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (runId: string) => jsonFetch(`/api/schema-runs/${runId}/cancel`, { method: 'POST' }),
-    onSuccess: () => {
+    // U160: invalidate the list + only THIS run's detail (not every run-detail query).
+    onSuccess: (_data, runId) => {
       qc.invalidateQueries({ queryKey: ['schema-runs'] })
-      qc.invalidateQueries({ queryKey: ['schema-run'] })
+      qc.invalidateQueries({ queryKey: ['schema-run', runId] })
     },
   })
 }

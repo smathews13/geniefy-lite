@@ -438,11 +438,14 @@ class SessionStore:
         sets: list[str] = []
         params: list[Any] = []
         if status is not None:
-            sets.append("status = %s"); params.append(status)
+            sets.append("status = %s")
+            params.append(status)
         if total_tables is not None:
-            sets.append("total_tables = %s"); params.append(total_tables)
+            sets.append("total_tables = %s")
+            params.append(total_tables)
         if job_run_id is not None:
-            sets.append("job_run_id = %s"); params.append(job_run_id)
+            sets.append("job_run_id = %s")
+            params.append(job_run_id)
         if not sets:
             return
         params.append(run_id)

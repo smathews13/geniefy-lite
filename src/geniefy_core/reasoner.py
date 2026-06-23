@@ -43,7 +43,8 @@ _GROUNDING_RULES = (
     "Rules: fill each applicable field ONLY from the provided evidence; if the evidence "
     "does not support a field, omit it or write \"unknown\" — never speculate. Cite the "
     "signal(s) you used in evidence_refs (e.g. 'profile.null_fraction', 'context:uc_lineage'). "
-    "Honor the style limits. Return ONLY the JSON object, no prose."
+    "Honor the style limits. Return ONLY the JSON object, with no extra prose outside it "
+    "(the comment fields themselves are prose — that is expected)."
 )
 
 # Library reuse-on-generation (D52 §A4 / U104): prefer approved canonical wording when it fits.

@@ -71,8 +71,12 @@ export function ReviewView({ sessionId, session }: { sessionId: string; session:
   const tableConf = tableCard?.draft.confidence ?? null
   const colConfs = columnCards.map((c) => c.draft.confidence).filter((x): x is number => x != null)
   const colMean = colConfs.length ? colConfs.reduce((a, b) => a + b, 0) / colConfs.length : null
-  const overall =
-    tableConf != null && colMean != null ? 0.5 * tableConf + 0.5 * colMean : tableConf ?? colMean
+  // Explicit branching (mirrors the server's _confidence_summary, U159): weighted when both sides
+  // exist, else the one present side, else null.
+  let overall: number | null
+  if (tableConf != null && colMean != null) overall = 0.5 * tableConf + 0.5 * colMean
+  else if (tableConf != null) overall = tableConf
+  else overall = colMean
   const reviewReady = cards.filter(
     (c) =>
       ['draft', 'approved', 'edited'].includes(c.draft.status) &&

@@ -576,6 +576,38 @@ def test_start_schema_run_job_failure_marks_failed_502():
     assert r.status_code == 502
 
 
+def test_get_schema_run_summarizes_only_reviewable_sessions():
+    # U159 (closes U155 perf + attach-test LOWs): get_schema_run attaches confidence_summary for
+    # REVIEWABLE sessions and NOT for in-progress ones — and must not even LOAD the in-progress ones.
+    from geniefy_app.api import SessionService
+
+    loaded: list[str] = []
+    rev = SessionState(target="c.s.t1", config=RunConfig(model_endpoint="m", keep_threshold=0.75),
+                       table_draft=TableDraft(proposed_comment="t", confidence=0.9),
+                       column_drafts=[ColumnDraft(column_name="a", confidence=0.95)])
+    rev.session_id = "rev"
+
+    class _S:
+        def get_schema_run(self, rid):
+            return {"id": rid, "status": "running"}
+
+        def list_sessions(self, *, schema_run_id=None, **k):
+            return [{"session_id": "rev", "status": "ready_for_review"},
+                    {"session_id": "inprog", "status": "reasoning"}]
+
+        def load(self, sid):
+            loaded.append(sid)
+            return rev if sid == "rev" else None
+
+    svc = SessionService(make_orchestrator=lambda t: None, store=_S(),
+                         config=RunConfig(model_endpoint="m"))
+    run = svc.get_schema_run("run-x")
+    by = {s["session_id"]: s["confidence_summary"] for s in run["sessions"]}
+    assert by["rev"] is not None and by["rev"]["approvable"] == 2   # table + a summarized
+    assert by["inprog"] is None                                     # in-progress → not summarized
+    assert loaded == ["rev"]                                        # in-progress session NOT loaded (perf)
+
+
 def test_start_schema_run_no_run_id_marks_failed_502():
     # U110/U148: trigger returns no run id → record marked failed (not left at 'enumerating'), 502
     c, store, _ = _client(run_schema_job=lambda *a: None)
