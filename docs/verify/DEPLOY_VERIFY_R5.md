@@ -38,10 +38,14 @@ PASS-FINDINGS (honesty pairing + distinct-axes + rollup + governance verified; J
 buttons) and U157 PASS-FINDINGS (no UC write on approve, correct session targeted, no nested buttons,
 type matches the server).
 
-## 4. Not done this session (honest gap)
+## 4. In-browser verification
 
-**In-browser pixel verification via Chrome DevTools did not run** — the chrome-devtools MCP server
-disconnected mid-verify (the preview process was killed). The R5 UI rendering is covered by the build +
-lint + independent audits + the functional route verification above, but the pixel-level in-browser pass
-(the literal rendered meter/breakdown/button) is deferred. Re-run with chrome-devtools once the MCP is
-reconnected, or eyeball the deployed app directly.
+**Automated Chrome DevTools pass: not run** — the chrome-devtools MCP server disconnected mid-verify
+(the preview process was killed) and stayed unavailable.
+
+**Human in-browser verification: ✅ PASS (2026-06-23).** The reviewer drove the R5 UI live against the
+local devloop (`http://127.0.0.1:8770`, the real `SessionService` routes + the real React build) and
+confirmed it **"looks good"** — the Confidence meter + breakdown + weakest caveat, the "Approve N
+high-confidence" button, and the Schema-tab per-table confidence + bulk-approve all render and behave
+as designed. Human review is a sanctioned gate (PROTOCOL — design/UX phase). The automated pixel pass
+remains available to re-run if chrome-devtools is reconnected, but is no longer a gap.
