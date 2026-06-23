@@ -4,8 +4,8 @@ A visual walkthrough of geniefy-lite documenting a Unity Catalog table, followin
 **point at a table → watch it draft → review with confidence + explainability → answer the agent's
 questions → apply, human-approved.** For the architecture behind these screens, see
 [`ARCHITECTURE.md`](ARCHITECTURE.md); for live deploy/verification evidence, see
-[`DEPLOY_VERIFY.md`](DEPLOY_VERIFY.md) and its siblings ([`R2`](DEPLOY_VERIFY_R2.md),
-[`R3-005`](DEPLOY_VERIFY_R3-005.md), [`R3-006`](DEPLOY_VERIFY_R3-006.md)) in this folder.
+[`DEPLOY_VERIFY.md`](verify/DEPLOY_VERIFY.md) and its siblings ([`R2`](verify/DEPLOY_VERIFY_R2.md),
+[`R3-005`](verify/DEPLOY_VERIFY_R3-005.md), [`R3-006`](verify/DEPLOY_VERIFY_R3-006.md)) under [`verify/`](verify/).
 
 > **Note on branding.** These screenshots were captured on a pre-R4 build, so the header reads
 > *“geniefy”* and the first nav tab is *“Document”*. The product is now **geniefy-lite** and that tab
