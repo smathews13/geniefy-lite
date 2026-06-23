@@ -85,7 +85,7 @@ geniefy-lite applies its schema into a dedicated **`geniefy`** Postgres database
 Lakebase. **`deploy.sh` does this for you** via
 [`migrations/run_migrations.py`](migrations/run_migrations.py) — idempotent, branch-aware (dev vs prod),
 safe to re-run. The bundle also declares a **`geniefy_setup`** job that runs the same migration on a job
-cluster. Manual driver + originally-validated commands: [`migrations/APPLY.md`](migrations/APPLY.md).
+cluster. Manual driver + originally-validated commands: [`docs/verify/APPLY.md`](docs/verify/APPLY.md).
 
 ## Run the tests
 
