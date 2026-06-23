@@ -75,6 +75,57 @@ class SessionError(Exception):
         self.detail = detail
 
 
+_TABLE_TARGET = "__table__"
+
+
+def _all_drafts(state: SessionState) -> list[tuple[str, Any]]:
+    """``(target_name, draft)`` for the table comment + each column draft (LLD-amend-007)."""
+    out: list[tuple[str, Any]] = []
+    if state.table_draft is not None:
+        out.append((_TABLE_TARGET, state.table_draft))
+    out.extend((c.column_name, c) for c in state.column_drafts)
+    return out
+
+
+def _high_confidence_targets(state: SessionState) -> list[str]:
+    """Targets eligible for bulk-approve (LLD-amend-007 §3, D59): ``status == DRAFT`` — which already
+    encodes the Gate's keep decision (kept drafts stay DRAFT; trips / low-confidence become
+    NEEDS_INPUT / LOW_CONFIDENCE) — AND ``confidence >= keep_threshold`` as a defensive re-check
+    (covers a keep_threshold lowered after gating). Excludes everything flagged or already acted-on,
+    so the flagged minority always needs explicit review (no blanket approve, D7)."""
+    thr = state.config.keep_threshold
+    return [name for name, d in _all_drafts(state)
+            if d.status == DraftStatus.DRAFT and d.confidence is not None and d.confidence >= thr]
+
+
+def _confidence_summary(state: SessionState) -> dict[str, Any]:
+    """Overall table confidence + Gate-bucket breakdown + weakest draft (LLD-amend-007 §2, D59).
+    Weighted rollup (0.5 * table-comment + 0.5 * column mean); null confidences excluded; all-null →
+    ``overall=None``. The single number is always returned WITH the buckets + weakest so it can't hide
+    a weak draft (D22/D23). Deterministic — a rollup of the Judge's per-draft scores, no new Judge call."""
+    drafts = _all_drafts(state)
+    table_conf = state.table_draft.confidence if state.table_draft else None
+    col_confs = [c.confidence for c in state.column_drafts if c.confidence is not None]
+    col_mean = (sum(col_confs) / len(col_confs)) if col_confs else None
+    if table_conf is not None and col_mean is not None:
+        overall: float | None = 0.5 * table_conf + 0.5 * col_mean
+    else:
+        overall = table_conf if table_conf is not None else col_mean  # one side, or None if both null
+    thr = state.config.keep_threshold
+    review_ready = sum(1 for _, d in drafts
+                       if d.status in (DraftStatus.DRAFT, DraftStatus.APPROVED, DraftStatus.EDITED)
+                       and d.confidence is not None and d.confidence >= thr)
+    scored = [(name, d.confidence) for name, d in drafts if d.confidence is not None]
+    weakest = min(scored, key=lambda t: t[1]) if scored else None
+    return {
+        "overall": overall,
+        "review_ready": review_ready,
+        "needs_input": sum(1 for _, d in drafts if d.status == DraftStatus.NEEDS_INPUT),
+        "low": sum(1 for _, d in drafts if d.status == DraftStatus.LOW_CONFIDENCE),
+        "weakest": {"target": weakest[0], "confidence": weakest[1]} if weakest else None,
+    }
+
+
 @dataclass
 class SessionService:
     """Backend business logic (run/resume/review/get), persistence-backed."""
@@ -171,6 +222,28 @@ class SessionService:
         if action in ("approve", "edit"):
             self._write_library_on_approve(state, draft, target_name, created_by)
         self.store.save(state, created_by=created_by)
+
+    def approve_high_confidence(self, session_id: str, *, created_by: str) -> dict[str, Any]:
+        """Bulk-approve only the high-confidence, unflagged drafts (LLD-amend-007 §3, D59). Mirrors
+        ``review_draft``'s approve semantics — set ``status=APPROVED`` + best-effort write-on-approve;
+        **no ``audit_log`` row** (per-draft approve writes none; audit is apply-time + OBO, D48). Leaves
+        needs_input / low_confidence / errored / already-acted drafts untouched for explicit review (no
+        blanket approve, D7). Returns ``{approved: [target…], count}``. Bulk-APPROVE is NOT apply — UC
+        writes stay explicit + human/OBO."""
+        state = self.store.load(session_id)
+        if state is None:
+            raise SessionError(404, "session not found")
+        approved: list[str] = []
+        for name in _high_confidence_targets(state):
+            draft = state.table_draft if name == _TABLE_TARGET else state.column_draft(name)
+            if draft is None:
+                continue
+            draft.status = DraftStatus.APPROVED
+            self._write_library_on_approve(state, draft, name, created_by)
+            approved.append(name)
+        if approved:
+            self.store.save(state, created_by=created_by)
+        return {"approved": approved, "count": len(approved)}
 
     def _write_library_on_approve(self, state: SessionState, draft: Any,
                                   target_name: str | None, created_by: str) -> None:
@@ -312,7 +385,16 @@ class SessionService:
         run = self.store.get_schema_run(run_id)
         if run is None:
             return None
-        run["sessions"] = self.store.list_sessions(schema_run_id=run_id, limit=200)
+        sessions = self.store.list_sessions(schema_run_id=run_id, limit=200)
+        # Attach a per-table confidence_summary (LLD-amend-007 §4) so the Schema view shows per-table
+        # confidence + bulk-approve counts without opening each table. v1 loads each session to reuse
+        # the one rollup helper; if runs get very large this should move to a SQL aggregate or a
+        # summary persisted at generation time (perf follow-on).
+        for s in sessions:
+            sid = s.get("session_id") or s.get("id")
+            st = self.store.load(sid) if sid else None
+            s["confidence_summary"] = _confidence_summary(st) if st is not None else None
+        run["sessions"] = sessions
         return run
 
     def cancel_schema_run(self, run_id: str) -> None:
@@ -521,6 +603,16 @@ def create_app(service: SessionService, *, static_dir: str | None = None):
         except SessionError as e:
             raise HTTPException(e.status_code, e.detail)
         return {"session_id": session_id, "target": target_name, "action": req.action}
+
+    @app.post("/api/sessions/{session_id}/approve-high-confidence")
+    def approve_high_confidence(session_id: str):
+        # Bulk-approve is a review action (not apply) → runs as the app SP (D48). Approves only the
+        # high-confidence, unflagged drafts (LLD-amend-007 §3); flagged drafts still need explicit
+        # review, and nothing is written to UC (approve != apply).
+        try:
+            return service.approve_high_confidence(session_id, created_by=_actor())
+        except SessionError as e:
+            raise HTTPException(e.status_code, e.detail)
 
     @app.post("/api/sessions/{session_id}/apply")
     def apply(session_id: str, identity: RequestIdentity = Depends(_identity)):

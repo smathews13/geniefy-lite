@@ -395,6 +395,70 @@ def test_apply_not_yet_wired_501():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Overall confidence + bulk high-confidence approve (LLD-amend-007 / D59 / U155)
+# ─────────────────────────────────────────────────────────────────────────────
+def _conf_state():
+    return SessionState(
+        target="c.s.t", config=RunConfig(model_endpoint="m", keep_threshold=0.75),
+        phase=Phase.READY_FOR_REVIEW,
+        table_draft=TableDraft(proposed_comment="t", confidence=0.9),                 # high draft
+        column_drafts=[
+            ColumnDraft(column_name="a", confidence=0.95),                            # high draft
+            ColumnDraft(column_name="b", confidence=0.5, status=DraftStatus.NEEDS_INPUT),     # flagged
+            ColumnDraft(column_name="c", confidence=0.6, status=DraftStatus.LOW_CONFIDENCE),  # flagged
+            ColumnDraft(column_name="d", confidence=0.8),                             # high draft
+        ],
+    )
+
+
+def test_high_confidence_targets_selects_only_unflagged_above_threshold():
+    from geniefy_app.api import _high_confidence_targets
+    # table(0.9)+a(0.95)+d(0.8) are DRAFT & ≥0.75 → eligible; b/c are flagged → excluded
+    assert set(_high_confidence_targets(_conf_state())) == {"__table__", "a", "d"}
+
+
+def test_confidence_summary_rollup_buckets_and_weakest():
+    from geniefy_app.api import _confidence_summary
+    s = _confidence_summary(_conf_state())
+    # overall = 0.5*0.9 + 0.5*mean(0.95,0.5,0.6,0.8) = 0.45 + 0.35625 = 0.80625
+    assert abs(s["overall"] - 0.80625) < 1e-9
+    assert s["review_ready"] == 3                       # table + a + d (≥0.75, unflagged)
+    assert s["needs_input"] == 1 and s["low"] == 1
+    assert s["weakest"] == {"target": "b", "confidence": 0.5}   # lowest confidence, even though flagged
+
+
+def test_confidence_summary_all_null_overall_is_none():
+    from geniefy_app.api import _confidence_summary
+    st = SessionState(target="c.s.t", config=RunConfig(model_endpoint="m"),
+                      table_draft=TableDraft(proposed_comment="t", confidence=None),
+                      column_drafts=[ColumnDraft(column_name="x", confidence=None)])
+    assert _confidence_summary(st)["overall"] is None   # all-null → "—" client-side, never a fake 0
+
+
+def test_approve_high_confidence_approves_only_unflagged_above_threshold():
+    c, store, _ = _client()
+    st = SessionState(target="c.s.t", config=RunConfig(model_endpoint="m", keep_threshold=0.75),
+                      phase=Phase.READY_FOR_REVIEW,
+                      table_draft=TableDraft(proposed_comment="t", confidence=0.9),
+                      column_drafts=[
+                          ColumnDraft(column_name="a", confidence=0.95),                          # approve
+                          ColumnDraft(column_name="b", confidence=0.5, status=DraftStatus.NEEDS_INPUT),  # leave
+                          ColumnDraft(column_name="d", confidence=0.6),                           # below thr → leave
+                      ])
+    sid = store.save(st, created_by="u")
+    r = c.post(f"/api/sessions/{sid}/approve-high-confidence")
+    assert r.status_code == 200
+    body = r.json()
+    assert set(body["approved"]) == {"__table__", "a"} and body["count"] == 2
+    g = c.get(f"/api/sessions/{sid}").json()
+    assert g["table_draft"]["status"] == "approved"
+    by = {col["column_name"]: col["status"] for col in g["column_drafts"]}
+    assert by["a"] == "approved"
+    assert by["b"] == "needs_input"     # flagged → left for explicit review (no blanket approve)
+    assert by["d"] == "draft"           # below threshold → left untouched
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Regenerate (E3/D45)
 # ─────────────────────────────────────────────────────────────────────────────
 def test_regenerate_route_redrafts_then_polls_ready():

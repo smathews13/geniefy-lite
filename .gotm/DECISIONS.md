@@ -692,5 +692,19 @@ a clean migrated schema) — acceptable, it was throwaway test data and "sustain
 
 **Decision.** D31/LLD-frontend §1 named the stack as "Tailwind/**shadcn**", but the SPA was built (R1→R4, live-verified) entirely with **raw Tailwind + small hand-rolled primitives** (`components/Pill.tsx`, the viz primitives, the screen components) — **shadcn/ui (and its radix deps) were never vendored.** This decision ratifies that as the **intended** stack rather than a defect: vendoring shadcn into a working, live-verified UI now would be pure styling-convention churn (re-skinning components that already render and behave correctly) with **zero functional gain** and real regression risk. The U56-U58 audit explicitly offered this as a valid resolution ("either vendor shadcn **OR** record a decision that raw Tailwind supersedes the shadcn part of D31"). **Why:** the deliverable is a working, governed documentation app; the component library is an implementation detail, and the hand-rolled primitives are lighter and already proven. **The other half of §7's FE gate — `eslint` — IS being added** (U152), so the lint gate the design called for is honored. If a future contributor wants shadcn, that's a deliberate, separately-scoped migration, not an open audit finding. Supersedes the "shadcn" clause of D31 only; the rest of the frontend stack (Vite·React·TS·Tailwind·TanStack Query·visx/Recharts) stands.
 
+## D59 — Overall table confidence + bulk high-confidence approve (interactive + hands-off, human-ratified)
+
+**Date:** 2026-06-23 · **Scope:** project (review UX; extends D8 Judge confidence · D22/D23 honest UX · D7/D48 human-approved apply) · **Status:** locked · **Designed in:** U154 (LLD-amend-007)
+
+**Decision (human-ratified from a design discussion).** Add two paired review affordances, on BOTH the interactive review and the hands-off schema view:
+
+1. **Overall table confidence** — a **client-side weighted rollup** of the Judge's per-draft confidences (anchor on the table-comment confidence + the column mean; NOT a new Judge call), surfaced up top as a **second meter labeled "Confidence"**, visually distinct from the existing **"AI-ready"** ring (which stays `applied/total` — a different axis). It is **always paired with an honest breakdown** using the Gate's own buckets — **`N review-ready (≥ keep_threshold, no hard-signal trip) · M needs-input · K low-confidence`** — plus a **"weakest: `<draft>` @ X%"** caveat, so a single number can never hide a weak draft (D22/D23 honesty).
+
+2. **Bulk "Approve N high-confidence"** — one action that approves **only** drafts that are `≥ keep_threshold`, carry no hard-signal trip, and are status `draft` (i.e. NOT `needs_input`/`low_confidence`/`error`/already-acted), leaving the flagged minority for **explicit per-draft review**. **No blanket "approve all"** — blind approval would defeat the governed-review model (D7); the flagged drafts always require explicit attention. Implemented as an **atomic server endpoint** (reused by both surfaces) so it isn't N client round-trips.
+
+3. **Extend both to the hands-off Schema view** — per-table **overall confidence + breakdown** in the schema-run table list, and a per-table **"Approve N high-confidence"** action that operates on a session via the bulk endpoint **without opening it**. **Bulk-APPROVE ≠ apply** — every UC write stays human-in-the-loop OBO (D48/D7); approving in bulk only stages drafts for a subsequent explicit Apply.
+
+**Build shape:** backend bulk-approve endpoint + per-session overall-confidence surfaced in the schema-run view; frontend `ReviewView` (meter + breakdown + button) and `SchemaRunView` (per-table confidence + button). The overall-confidence rollup is deterministic/client-side; the bulk-approve threshold logic is server-side (single source of truth, used by both surfaces).
+
 <!-- Append new decisions below this line. -->
 
