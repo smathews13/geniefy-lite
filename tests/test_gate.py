@@ -159,6 +159,19 @@ def test_apply_batch_marks_low_confidence_and_asks_nothing():
     assert st.column_draft("o_orderkey").status == DraftStatus.DRAFT  # kept
 
 
+def test_apply_hands_off_produces_questions_like_interactive():
+    # U108/U149: HANDS_OFF routes like INTERACTIVE at the gate — it PRODUCES clarifying questions
+    # (persisted as awaiting_input for a later answer+resume), NOT auto-keep like BATCH. Guards
+    # against a regression that would silently make hands-off behave like batch (no questions).
+    st = _state(SessionMode.HANDS_OFF)
+    qs = Gate(st.config).apply(st, _signals())
+    assert {q.target_name for q in qs} == {"tier", "o_custkey"}          # questions produced, not skipped
+    assert st.column_draft("tier").status == DraftStatus.NEEDS_INPUT
+    assert st.column_draft("o_custkey").status == DraftStatus.NEEDS_INPUT
+    assert st.column_draft("o_orderkey").status == DraftStatus.DRAFT     # kept, untouched
+    assert st.open_questions == qs
+
+
 def test_apply_trips_the_table_draft():
     # the TABLE draft itself can route to needs_input, not just columns (U30 audit MED — the
     # apply() table path was untested). Below-threshold table confidence → a table Question.

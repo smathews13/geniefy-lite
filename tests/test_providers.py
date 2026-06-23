@@ -360,3 +360,30 @@ def test_lakebase_db_token_requires_endpoint_on_cluster():
     from geniefy_app.providers import lakebase_db_token
     with pytest.raises(RuntimeError):
         lakebase_db_token(_FakeW(_FakeConfig(oauth=None), api_client=_FakeApiClient({})), endpoint=None)
+
+
+def test_workspace_bearer_older_sdk_fills_passed_dict():
+    # U123/U149: an older SDK's authenticate() requires a dict arg (the no-arg call raises TypeError);
+    # the except-TypeError branch must fall back to authenticate(headers_dict) and read the header.
+    from geniefy_app.providers import workspace_bearer
+
+    class _OldConfig:
+        def oauth_token(self):
+            raise AttributeError("no oauth_token on this cluster runtime")
+
+        def authenticate(self, headers=None):
+            if headers is None:            # newer-style no-arg call → older SDK rejects it
+                raise TypeError("authenticate() missing 1 required positional argument: 'headers'")
+            headers["Authorization"] = "Bearer old-sdk-tok"
+
+    assert workspace_bearer(_FakeW(_OldConfig())) == "old-sdk-tok"
+
+
+def test_lakebase_db_token_raises_when_api_returns_no_token():
+    # U123/U149: cluster path — if the postgres credentials API returns no token, RAISE (never
+    # return None/empty, which would surface downstream as a confusing auth failure).
+    from geniefy_app.providers import lakebase_db_token
+    api = _FakeApiClient({})  # response carries no "token"
+    w = _FakeW(_FakeConfig(oauth=None), api_client=api)
+    with pytest.raises(RuntimeError, match="no token"):
+        lakebase_db_token(w, endpoint="projects/geniefy/branches/production/endpoints/primary")

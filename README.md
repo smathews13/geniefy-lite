@@ -58,7 +58,7 @@ The target workspace needs:
 ### Deploy steps
 
 ```bash
-git clone <repo> && cd geniefy-lite
+git clone https://github.com/RohitDashora/geniefy-lite.git && cd geniefy-lite
 
 # 1. App + migrations (dev FE-VM defaults target fevm-rd-classic; see databricks.yml)
 ./deploy.sh -t dev -p fe-vm-classic

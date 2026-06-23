@@ -419,6 +419,36 @@ def test_regenerate_unknown_session_404():
     assert c.post("/api/sessions/nope/regenerate", json={"all": True}).status_code == 404
 
 
+def test_regenerate_rejected_while_in_flight_409():
+    # U83/U149: regenerate while a run is already in flight → 409 (same in-progress guard as run/answers)
+    c, store, _ = _client()
+    st = SessionState(target="c.s.t", config=RunConfig(model_endpoint="m"), phase=Phase.REASONING)
+    sid = store.save(st, created_by="u")
+    r = c.post(f"/api/sessions/{sid}/regenerate", json={"all": True})
+    assert r.status_code == 409
+
+
+def test_regenerate_all_forwards_none_targets_to_orchestrator():
+    # U83/U149: "all": true must forward targets=None to Orchestrator.regenerate (= regenerate
+    # everything), not [] or a literal. Capture what the orchestrator actually received.
+    captured: list = []
+
+    class _CapOrch(FakeOrch):
+        def regenerate(self, state, targets):
+            captured.append(targets)
+            return super().regenerate(state, targets)
+
+    store = FakeStore()
+    service = SessionService(
+        make_orchestrator=lambda tracer: _CapOrch(tracer, needs_input=True),
+        store=store, config=RunConfig(model_endpoint="m", template_id="default"))
+    c = TestClient(create_app(service))
+    sid = c.post("/api/run", json={"table": "samples.tpch.orders"}).json()["session_id"]
+    captured.clear()  # run() does not regenerate; isolate the regenerate call
+    assert c.post(f"/api/sessions/{sid}/regenerate", json={"all": True}).status_code == 202
+    assert captured == [None]   # "all" → None forwarded (regenerate everything)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # History + library + per-column profile (E6/E7/E4)
 # ─────────────────────────────────────────────────────────────────────────────

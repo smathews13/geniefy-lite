@@ -28,7 +28,7 @@ export function QuestionsPanel({ sessionId, questions }: { sessionId: string; qu
       <div className="mt-3 space-y-3">
         {questions.map((q) => (
           <div key={q.id}>
-            <p className="text-sm text-amber-900">
+            <p id={`q-${q.id}`} className="text-sm text-amber-900">
               {q.text}
               {q.target_name && (
                 <span className="ml-2 font-mono text-xs text-amber-700">{q.target_name}</span>
@@ -36,6 +36,9 @@ export function QuestionsPanel({ sessionId, questions }: { sessionId: string; qu
             </p>
             <div className="mt-1 flex items-center gap-2">
               <input
+                id={`answer-${q.id}`}
+                name={`answer-${q.id}`}
+                aria-labelledby={`q-${q.id}`}
                 value={valueFor(q)}
                 onChange={(e) => setText({ ...text, [q.id]: e.target.value })}
                 placeholder="Your answer…"
