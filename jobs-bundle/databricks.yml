@@ -39,13 +39,15 @@ variables:
     description: FMAPI Claude serving endpoint for generation
     default: databricks-claude-sonnet-4-6
   pg_host:
-    description: Lakebase endpoint host the app binds (the DEV branch — must match the app, U117)
-    default: ep-curly-sunset-d2sz2asi.database.us-east-1.cloud.databricks.com
+    description: Lakebase PRODUCTION endpoint host (D57/U136 — the Job uses the stable production
+      branch, matching the app's geniefy-db binding; the dev endpoint host churns and the prior
+      dev host was deleted, which made the Job fail password auth on the dead endpoint).
+    default: ep-blue-smoke-d2yetcmv.database.us-east-1.cloud.databricks.com
   pg_database:
     default: geniefy
   lakebase_endpoint:
-    description: Lakebase endpoint PATH for minting the cluster DB credential (must be pg_host's branch, U123)
-    default: projects/geniefy/branches/dev/endpoints/primary
+    description: Lakebase endpoint PATH for minting the cluster DB credential (must be pg_host's branch, U123/U136 — production)
+    default: projects/geniefy/branches/production/endpoints/primary
 
 targets:
   dev:

@@ -22,11 +22,13 @@ env:
   # ── Infra — bound at deploy from databricks.yml vars / app resource bindings (U8) ─────
   - name: GENIEFY_WAREHOUSE_ID
     valueFrom: sql-warehouse              # app resource binding (the bound SQL warehouse)
-  - name: GENIEFY_PG_HOST                 # Lakebase DEV-branch endpoint host (U77). DAB does
-    value: ep-curly-sunset-d2sz2asi.database.us-east-1.cloud.databricks.com  # NOT substitute
-                                          # ${var} in app.yaml env, so this is a literal; the
-                                          # app self-OAuths and the UI-added `geniefy-db`
-                                          # postgres binding grants the SP its branch role.
+  - name: GENIEFY_PG_HOST                 # Lakebase PRODUCTION-branch endpoint host (D57/U135).
+    value: ep-blue-smoke-d2yetcmv.database.us-east-1.cloud.databricks.com  # Repointed from the dev
+                                          # branch, whose Autoscaling endpoint host churns and breaks
+                                          # this pinned literal; production is stable/sustained. DAB
+                                          # doesn't ${var}-substitute app.yaml env, so this is a
+                                          # literal; the app self-OAuths and the app SP holds a
+                                          # Postgres role on the production branch (granted at deploy).
   - name: GENIEFY_PG_DATABASE
     value: geniefy                        # working-store database (D30)
   - name: GENIEFY_PG_SCHEMA

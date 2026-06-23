@@ -114,7 +114,7 @@ def lakebase_db_token(w: Any, *, endpoint: str | None = None) -> str:
         pass
     if not endpoint:
         raise RuntimeError("Lakebase endpoint path required to mint a cluster DB credential "
-                           "(set GENIEFY_LAKEBASE_ENDPOINT, e.g. projects/geniefy/branches/dev/endpoints/primary)")
+                           "(set GENIEFY_LAKEBASE_ENDPOINT, e.g. projects/geniefy/branches/production/endpoints/primary)")
     import uuid
     resp = w.api_client.do("POST", "/api/2.0/postgres/credentials",
                            body={"request_id": str(uuid.uuid4()), "endpoint": endpoint})

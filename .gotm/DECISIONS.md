@@ -668,5 +668,23 @@ the code has no `fe-vibe/services/` coupling. **Implementing units:** U131 (.git
 create private remote + push). The Databricks app *resource* stays `geniefy-dev` (D55); only the repo is
 named geniefy-lite.
 
+## D57 — Dev deployment uses the production Lakebase branch (sustained persistence, human directive)
+
+**Date:** 2026-06-22 · **Scope:** project (deployment topology / persistence) · **Status:** locked · **Grounded in:** U135 live findings
+
+**Decision (human directive — "point to the prod branch so we can have sustained lakebase").** The dev
+deployment (app resource `geniefy-dev` on `fe-vm-classic`) is repointed from the **dev** Lakebase branch to
+the stable **production** branch. **Why:** the dev branch's Autoscaling endpoint host *churns* — its primary
+endpoint host changed `ep-curly-sunset-d2sz2asi` → `ep-broad-bread-d28yr0ae`, which breaks the
+`app.yaml`-pinned `GENIEFY_PG_HOST` literal (DAB can't `${var}`-substitute `app.yaml` env, so the host is
+hardcoded) → the app can no longer reach Lakebase (looks "gone"). The **production** branch's primary
+endpoint (`ep-blue-smoke-d2yetcmv`) is stable and not recreated → sustained persistence. **Changes (U135):**
+(1) `app.yaml` `GENIEFY_PG_HOST` → the production endpoint host; (2) `deploy.sh` `DB_BRANCH` defaults to
+`production` for every target (the `GENIEFY_LAKEBASE_BRANCH` override is preserved for an isolated branch);
+(3) the production branch migrated `001–004` (idempotent) + the app SP (`bcc7089c-…`) granted a Postgres
+role there. **Trade-off:** the dev branch's prior session/library data is left behind (production starts from
+a clean migrated schema) — acceptable, it was throwaway test data and "sustained going forward" is the goal.
+`databricks.yml`'s `pg_host` var default was already the production endpoint, so it needs no change.
+
 <!-- Append new decisions below this line. -->
 

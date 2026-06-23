@@ -57,11 +57,12 @@ done
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 PROJ="projects/${LAKEBASE_INSTANCE}"
-# The Lakebase branch must match what the app's `geniefy-db` binding connects to (U117 — the dev
-# app binds projects/${INSTANCE}/branches/dev, NOT production; migrating `production` left the
-# app's branch without the migration). Branch tracks the target: prod→production, else the target
-# name (dev→dev). Override with GENIEFY_LAKEBASE_BRANCH if your binding differs.
-DB_BRANCH="${GENIEFY_LAKEBASE_BRANCH:-$([[ "$TARGET" == "prod" ]] && echo production || echo "$TARGET")}"
+# Lakebase branch (D57/U135): default to the stable `production` branch for EVERY target. The dev
+# branch's Autoscaling endpoint host churns (ep-curly-sunset→ep-broad-bread) and breaks the
+# app.yaml-pinned GENIEFY_PG_HOST literal, so the dev deployment now uses production too — for
+# sustained persistence (app.yaml points at the production endpoint host). Override with
+# GENIEFY_LAKEBASE_BRANCH to target an isolated branch (e.g. GENIEFY_LAKEBASE_BRANCH=dev ./deploy.sh -t dev).
+DB_BRANCH="${GENIEFY_LAKEBASE_BRANCH:-production}"
 DB_ENDPOINT="primary"
 APP_NAME="geniefy-${TARGET}"
 
