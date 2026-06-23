@@ -29,6 +29,12 @@ deliverable is **structured metadata an LLM can act on**, not prose for humans.
   · keys · sensitivity) + tags, columns clearly secondary, and an explainability/Judge view.
 - **Governed apply** — writes go to UC **on-behalf-of you** (your grants), stamped with you as the actor.
 
+## Screenshots
+
+See [`docs/SCREENSHOTS.md`](docs/SCREENSHOTS.md) for a visual product tour — point at a table, review
+drafts with per-column confidence and profile fingerprints, answer the agent's clarifying questions
+(with suggested answers), inspect the Judge's "why," and apply to make the table AI-/Genie-ready.
+
 ## Deploy
 
 geniefy-lite ships as a [Databricks Asset Bundle](databricks.yml) plus a thin shell orchestrator. Clone
