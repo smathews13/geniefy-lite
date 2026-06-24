@@ -1,31 +1,27 @@
-# geniefy-jobs — SEPARATE DAB bundle for the hands-off schema-run Job (D54 / U119).
+# geniefy-jobs — separate DAB bundle for the hands-off schema-run Job.
 #
-# Why its own bundle: deploying a job that lives in the APP bundle requires `bundle deploy`, which
-# reconciles the app's `resources` to databricks.yml and WIPES the UI-added geniefy-db + fmapi
-# bindings → drops the SP's Lakebase role + grants (U77/U78/D48). This bundle's only resource is the
-# job, so `bundle deploy` here NEVER touches the app — fully grant-safe. The app keeps using the
-# grant-safe `--code-only` redeploy.
+# Why its own bundle: deploying a job that lives in the app bundle requires `bundle deploy`,
+# which reconciles the app's resources to databricks.yml and removes UI-added bindings
+# (Lakebase postgres, fmapi-endpoint), dropping the SP's Lakebase role and grants. This
+# bundle's only resource is the job, so `bundle deploy` here never touches the app.
 #
-# Code is STAGED into this dir by ../deploy_jobs.sh (geniefy_core/geniefy_app/schema_run_entry.py
-# copied in, mirroring how deploy.sh stages app/), so the bundle is self-contained — no cross-root sync.
+# Code is staged into this dir by ../deploy_jobs.sh (geniefy_core/geniefy_app/schema_run_entry.py
+# copied in, mirroring how deploy.sh stages app/), so the bundle is self-contained.
 bundle:
   name: geniefy-jobs
 
-# Run the Job AS the app SP (D48 consistency, U123): the job reads Lakebase/warehouse/FMAPI with the
-# same identity the app uses, and the SP's oauth-m2m auth supports w.config.oauth_token() on the
-# cluster (the run_as=deployer case used a runtime cred without it → the U113 AttributeError).
+# Run the Job as the app SP so it reads Lakebase/warehouse/FMAPI with the same identity the app uses.
+# Replace the service_principal_name values below with your app's service principal name or client ID.
 run_as:
-  service_principal_name: bcc7089c-deac-4f42-b125-4e5681c7d8c1
+  service_principal_name: <your-app-service-principal>
 
-# Bundle-level permissions apply to the resources AND the deployed workspace files (U123): the SP
-# (run_as) must be able to READ the staged entrypoint, which dev-mode deploys under the deployer's
-# home. Granting CAN_MANAGE here gives the SP that file access.
+# The SP (run_as) must be able to read the staged entrypoint.
 permissions:
   - level: CAN_MANAGE
-    service_principal_name: bcc7089c-deac-4f42-b125-4e5681c7d8c1
+    service_principal_name: <your-app-service-principal>
 
 sync:
-  # The staged core is .gitignored build artifact (like app/) — force-include so it uploads.
+  # The staged core is a gitignored build artifact — force-include so it uploads.
   include:
     - geniefy_core/**
     - geniefy_app/**
@@ -34,19 +30,18 @@ sync:
 variables:
   warehouse_id:
     description: SQL warehouse for profiling (SP reads)
-    default: 0336d1a2b47936b4
+    default: ""
   model_endpoint:
     description: FMAPI Claude serving endpoint for generation
     default: databricks-claude-sonnet-4-6
   pg_host:
-    description: Lakebase PRODUCTION endpoint host (D57/U136 — the Job uses the stable production
-      branch, matching the app's geniefy-db binding; the dev endpoint host churns and the prior
-      dev host was deleted, which made the Job fail password auth on the dead endpoint).
-    default: ep-blue-smoke-d2yetcmv.database.us-east-1.cloud.databricks.com
+    description: Lakebase PRODUCTION endpoint host — the Job uses the stable production branch.
+      deploy_jobs.sh resolves and passes this automatically.
+    default: <your-lakebase-endpoint-host>
   pg_database:
     default: geniefy
   lakebase_endpoint:
-    description: Lakebase endpoint PATH for minting the cluster DB credential (must be pg_host's branch, U123/U136 — production)
+    description: Lakebase endpoint path for minting the cluster DB credential (production branch)
     default: projects/geniefy/branches/production/endpoints/primary
 
 targets:
@@ -62,13 +57,10 @@ resources:
   jobs:
     geniefy_schema_run:
       name: geniefy-schema-run-${bundle.target}
-      description: "Hands-off schema documentation — enumerate a schema + generate per table (NEVER applies to UC; D51/Q7)."
-      # The app SP triggers this job (POST /api/schema-runs → run_now), so it needs run access to
-      # resolve + run it (U121, surfaced at U113). Declared here so every deploy re-applies it.
-      # (run_as defaults to the deployer — has access; run_as=<SP> is the prod refinement.)
+      description: "Hands-off schema documentation — enumerate a schema + generate per-table comments (never applies to UC)."
       permissions:
         - level: CAN_MANAGE_RUN
-          service_principal_name: bcc7089c-deac-4f42-b125-4e5681c7d8c1
+          service_principal_name: <your-app-service-principal>
       tasks:
         - task_key: schema_run
           spark_python_task:

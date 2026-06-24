@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# geniefy-v3 — one-command deploy orchestrator (U62, NFR-D / D35).
+# geniefy-v3 — one-command deploy orchestrator.
 #
 # DAB is the spine; this thin, **idempotent**, re-runnable script orchestrates the steps the
 # bundle can't express today (Lakebase Autoscaling provisioning, the frontend build, the
@@ -10,7 +10,7 @@
 #
 # Steps (each idempotent — a re-run heals a partial deploy):
 #   1. Preflight   — CLI >= 0.285 (Autoscaling Lakebase), jq, node/npm, auth reachable.
-#   2. Build FE    — vite build -> app/static (so the App serves the SPA at /, U61).
+#   2. Build FE    — vite build -> app/static.
 #   3. Lakebase    — create project/branch/endpoint if absent (DB itself is made in step 5).
 #   4. Deploy      — `bundle deploy` (App + geniefy_setup job + bindings) on a FIRST deploy; with
 #                    --code-only, a grant-safe REDEPLOY (sync + apps deploy, preserves grants/bindings).
@@ -37,7 +37,7 @@ usage() {
   echo "Flags: -t <dev|prod>  -p <cli-profile>  --host <url>  --skip-build  --use-job  --code-only  -h"
   echo "  --code-only  Grant-safe REDEPLOY of an existing app: sync files + deploy the code snapshot"
   echo "               WITHOUT 'bundle deploy' (which reconciles app resources and wipes the UI-added"
-  echo "               postgres + serving bindings → drops the SP Lakebase role + grants, U77/U78/D48)."
+  echo "               postgres + serving bindings → drops the SP Lakebase role + grants."
   exit "${1:-0}"
 }
 needval() { [[ -n "${2:-}" ]] || { echo "option $1 requires a value" >&2; usage 1; }; }
@@ -57,7 +57,7 @@ done
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 PROJ="projects/${LAKEBASE_INSTANCE}"
-# Lakebase branch (D57/U135): default to the stable `production` branch for EVERY target. The dev
+# Lakebase branch: default to the stable `production` branch for EVERY target. The dev
 # branch's Autoscaling endpoint host churns (ep-curly-sunset→ep-broad-bread) and breaks the
 # app.yaml-pinned GENIEFY_PG_HOST literal, so the dev deployment now uses production too — for
 # sustained persistence (app.yaml points at the production endpoint host). Override with
@@ -101,7 +101,7 @@ else
 fi
 [[ -f app/static/index.html ]] || die "app/static/index.html missing — the SPA build did not produce output"
 # Stage the agent core + backend into the app tree: the Databricks App's source_code_path is
-# ./app, so it imports geniefy_core/geniefy_app from its own dir at runtime (U77). Gitignored
+# ./app, so it imports geniefy_core/geniefy_app from its own dir at runtime. Gitignored
 # build artifacts, refreshed each deploy — psycopg2/pyyaml come from app/requirements.txt.
 rm -rf app/geniefy_core app/geniefy_app
 cp -R src/geniefy_core src/geniefy_app app/
@@ -117,7 +117,7 @@ else
   "${DBX[@]}" postgres create-project "$LAKEBASE_INSTANCE" \
     --json "{\"spec\":{\"display_name\":\"geniefy (${TARGET})\"}}" >/dev/null
 fi
-# Ensure the TARGET's branch + endpoint exist (U117): create-project only makes production/primary,
+# Ensure the TARGET's branch + endpoint exist: create-project only makes production/primary,
 # but the app may bind a non-production branch (the dev app binds .../branches/dev). Branch it from
 # production so it inherits the schema; idempotent (no-op if it already exists).
 if [[ "$DB_BRANCH" != "production" ]]; then
@@ -149,9 +149,9 @@ ok "Lakebase host ${PG_HOST}"
 step "4/7 Deploy app -t ${TARGET}$([[ "$CODE_ONLY" -eq 1 ]] && echo ' (code-only)')"
 "${DBX[@]}" bundle validate -t "$TARGET" --var "pg_host=${PG_HOST}" >/dev/null || die "bundle validate failed"
 if [[ "$CODE_ONLY" -eq 1 ]]; then
-  # Grant-safe REDEPLOY (U78/D48). `bundle deploy` reconciles the app's `resources` to databricks.yml
+  # Grant-safe REDEPLOY. `bundle deploy` reconciles the app's `resources` to databricks.yml
   # ([sql-warehouse] only) and WIPES the UI-added `geniefy-db` (Lakebase postgres) + `fmapi-endpoint`
-  # bindings → drops the SP's Lakebase role + schema grants (U77 finding #6). So for an existing app we
+  # bindings → drops the SP's Lakebase role + schema grants. So for an existing app we
   # sync files (NO resource reconciliation) + deploy the code snapshot — bindings + grants untouched.
   log "code-only redeploy: sync files + apps deploy (preserves resource bindings + Lakebase grants)"
   "${DBX[@]}" bundle sync -t "$TARGET" || die "bundle sync failed"
@@ -171,7 +171,7 @@ fi
 step "5/7 Apply migrations to the Lakebase 'geniefy' database"
 if [[ "$USE_JOB" -eq 1 ]]; then
   log "running the geniefy_setup job (bundle-native path) on branch ${DB_BRANCH}"
-  # Pass the per-target branch (U118) so the job migrates the branch the app binds, not always
+  # Pass the per-target branch so the job migrates the branch the app binds, not always
   # production — run_migrations.py reads it as argv[1] via the job's lakebase_branch parameter.
   "${DBX[@]}" bundle run geniefy_setup -t "$TARGET" --params "lakebase_branch=${DB_BRANCH}"
 else
@@ -187,7 +187,7 @@ ok "migrations applied (idempotent)"
 step "6/7 Grants for the app service principal"
 SP="$("${DBX[@]}" apps get "$APP_NAME" -o json 2>/dev/null | jq -r '.service_principal_client_id // .service_principal_name // empty')"
 # The app SP authenticates to Postgres via OAuth — it needs a role on the branch (the access
-# the removed `database` binding would have implied, U77). Best-effort; non-fatal.
+# the removed `database` binding would have implied. Best-effort; non-fatal.
 # On a --code-only redeploy the role + grants are already in place and untouched, so we DON'T
 # re-provision (re-creating the role would defeat the grant-safe path) — just print the guidance.
 if [[ "$CODE_ONLY" -eq 1 ]]; then
@@ -203,7 +203,7 @@ fi
 cat <<EOF
   The app service principal${SP:+ ($SP)} needs (run as a metastore/table owner):
     GRANT SELECT ON TABLE <catalog>.<schema>.<table> TO \`$([[ -n "$SP" ]] && echo "$SP" || echo "<app-sp>")\`;   -- profiling
-    GRANT MODIFY ON TABLE <catalog>.<schema>.<table> TO \`$([[ -n "$SP" ]] && echo "$SP" || echo "<app-sp>")\`;   -- apply write-path (D7/U6)
+    GRANT MODIFY ON TABLE <catalog>.<schema>.<table> TO \`$([[ -n "$SP" ]] && echo "$SP" || echo "<app-sp>")\`;   -- apply write-path
   Lakebase + secret-scope access for the SP is granted by the resource bindings in databricks.yml.
 EOF
 ok "grant guidance printed (table-specific grants are the operator's call)"

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
-# geniefy-v3 — deploy the hands-off schema-run Job (SEPARATE bundle, D54/U119).
+# geniefy-v3 — deploy the hands-off schema-run Job.
 #
 # Deployed INDEPENDENTLY of the app bundle: this bundle's only resource is the job, so its
 # `bundle deploy` never reconciles (and never wipes) the app's Lakebase/fmapi bindings + SP grants
-# (the grant-safety reason the app uses `--code-only`, U77/U78/D48). Stages the agent core +
+# . Stages the agent core +
 # entrypoint into jobs-bundle/ (mirroring deploy.sh's app staging) so the bundle is self-contained.
 #
 #   ./deploy_jobs.sh -t dev -p <cli-profile>

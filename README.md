@@ -58,23 +58,20 @@ The target workspace needs:
 ### Deploy steps
 
 ```bash
-git clone https://github.com/RohitDashora/geniefy-lite.git && cd geniefy-lite
+git clone https://github.com/smathews13/geniefy-lite.git && cd geniefy-lite
 
-# 1. App + migrations (dev FE-VM defaults target fevm-rd-classic; see databricks.yml)
-./deploy.sh -t dev -p fe-vm-classic
-
-# 1b. Customer workspace
-./deploy.sh -t prod --host https://<your-workspace>.cloud.databricks.com -p <profile>
+# 1. Deploy the App + migrations
+./deploy.sh -t prod --host https://<your-workspace>.cloud.databricks.com -p <your-profile>
 
 # 2. The hands-off schema-run Job (separate bundle, grant-safe)
-./deploy_jobs.sh -t dev -p fe-vm-classic
+./deploy_jobs.sh -t prod --host https://<your-workspace>.cloud.databricks.com -p <your-profile>
 ```
 
 `deploy.sh` is idempotent: preflight → build the frontend → ensure Lakebase → `bundle deploy` → apply
 migrations → print the grants you need → print the App URL.
 
 > **Grant-safe code redeploys.** Once the App's Lakebase/FMAPI resource bindings are wired (some are
-> added in the UI), redeploy app code with **`./deploy.sh -t dev -p fe-vm-classic --code-only`** — this
+> added in the UI), redeploy app code with **`./deploy.sh -t prod -p <your-profile> --code-only`** — this
 > runs `bundle sync` + `databricks apps deploy` only, so it **never reconciles app resources** and your
 > bindings + SP grants survive. A full `bundle deploy` is for first-time / fresh-customer setup. The
 > hands-off Job is in its own bundle precisely so deploying it can't disturb the app's grants.
@@ -132,5 +129,5 @@ GOTM files:
 
 ## License
 
-[Apache License 2.0](LICENSE) — open-source and customer-shippable (D13). Swappable to the Databricks
+[Apache License 2.0](LICENSE) — open-source and customer-shippable . Swappable to the Databricks
 License if distributed via official Databricks demo channels (e.g., dbdemos).

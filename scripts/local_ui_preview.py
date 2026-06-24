@@ -98,17 +98,17 @@ _LIBRARY = [
 ]
 
 # Hands-off schema run demo (U109/U112): a run + its per-table sessions.
-_SCHEMA_RUN = {"id": "run-demo", "catalog": "rd_classic_catalog", "schema": "gaming_data",
+_SCHEMA_RUN = {"id": "run-demo", "catalog": "my_catalog", "schema": "gaming_data",
                "status": "completed_with_errors", "filters": {"skip_documented": False},
                "total_tables": 4, "counts": {"ready": 2, "needs_input": 1, "applied": 0, "error": 1},
                "job_run_id": 573067574879500, "created_by": "user@example.com",
                "created_at": "2026-06-14T00:00:00", "updated_at": "2026-06-14T00:10:00"}
 _RUN_SESSIONS = [
-    {"session_id": "demo", "target": "rd_classic_catalog.gaming_data.gold_arpdau", "status": "ready_for_review",
+    {"session_id": "demo", "target": "my_catalog.gaming_data.gold_arpdau", "status": "ready_for_review",
      "created_by": "app-service-principal", "created_at": "t0", "updated_at": "t1", "n_columns": 6, "n_applied": 0},
-    {"session_id": "s2", "target": "rd_classic_catalog.gaming_data.bronze_events", "status": "awaiting_input",
+    {"session_id": "s2", "target": "my_catalog.gaming_data.bronze_events", "status": "awaiting_input",
      "created_by": "app-service-principal", "created_at": "t0", "updated_at": "t1", "n_columns": 11, "n_applied": 0},
-    {"session_id": "s3", "target": "rd_classic_catalog.gaming_data.silver_sessions", "status": "ready_for_review",
+    {"session_id": "s3", "target": "my_catalog.gaming_data.silver_sessions", "status": "ready_for_review",
      "created_by": "app-service-principal", "created_at": "t0", "updated_at": "t1", "n_columns": 8, "n_applied": 0},
 ]
 

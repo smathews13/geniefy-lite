@@ -20,7 +20,7 @@ def _full_env(**overrides) -> dict:
     env = {
         "GENIEFY_MODEL_ENDPOINT": "databricks-claude-sonnet-4-6",
         "GENIEFY_WAREHOUSE_ID": "0336d1a2b47936b4",
-        "GENIEFY_PG_HOST": "ep-blue-smoke.database.cloud.databricks.com",
+        "GENIEFY_PG_HOST": "ep-example.database.us-east-1.cloud.databricks.com",
         "GENIEFY_PG_DATABASE": "geniefy",
     }
     env.update(overrides)

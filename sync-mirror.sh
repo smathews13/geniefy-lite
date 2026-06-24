@@ -32,10 +32,13 @@ find . -not -path "./.git/*" \( -name "*.py" -o -name "*.yml" -o -name "*.yaml" 
     -e 's|rd_classic_catalog|my_catalog|g' \
     -e 's|RohitDashora/geniefy-lite|smathews13/geniefy-lite|g' \
     -e 's|rohit\.dashora@databricks\.com|<contributor-email>|g' \
+    -e 's|0336d1a2b47936b4|""|g' \
+    -e 's|bcc7089c-deac-4f42-b125-4e5681c7d8c1|<your-app-service-principal>|g' \
+    -e 's|fevm-rd-classic\.cloud\.databricks\.com||g' \
     {} \;
 
 echo "==> Checking for remaining internal references..."
-REMAINING=$(grep -rn "RohitDashora\|rohit\.dashora\|rd_classic\|ep-blue-smoke" \
+REMAINING=$(grep -rn "RohitDashora\|rohit\.dashora\|rd_classic\|ep-blue-smoke\|0336d1a2b47936b4\|bcc7089c-deac\|fevm-rd-classic" \
   --include="*.py" --include="*.yml" --include="*.yaml" --include="*.sh" \
   --include="*.md" --include="*.ts" --include="*.tsx" --include="*.json" \
   . 2>/dev/null | grep -v ".git/" || true)
