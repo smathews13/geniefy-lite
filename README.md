@@ -41,8 +41,7 @@ geniefy-lite ships as a [Databricks Asset Bundle](databricks.yml) plus a thin sh
 it and run [`./deploy.sh`](deploy.sh) to stand up the App and what it needs; environment-specific values
 are bundle variables where the DAB allows (workspace host comes from your CLI profile). The hands-off Job
 lives in a **separate bundle** ([`jobs-bundle/`](jobs-bundle)) deployed by
-[`./deploy_jobs.sh`](deploy_jobs.sh). Full design:
-[`docs/design/LLD-packaging-deployment.md`](docs/design/LLD-packaging-deployment.md).
+[`./deploy_jobs.sh`](deploy_jobs.sh). See [`docs/DEPLOY.md`](docs/DEPLOY.md) for the full deployment guide.
 
 ### Prerequisites
 
@@ -82,7 +81,7 @@ geniefy-lite applies its schema into a dedicated **`geniefy`** Postgres database
 Lakebase. **`deploy.sh` does this for you** via
 [`migrations/run_migrations.py`](migrations/run_migrations.py) — idempotent, branch-aware (dev vs prod),
 safe to re-run. The bundle also declares a **`geniefy_setup`** job that runs the same migration on a job
-cluster. Manual driver + originally-validated commands: [`docs/verify/APPLY.md`](docs/verify/APPLY.md).
+cluster.
 
 ## Run the tests
 
@@ -102,9 +101,6 @@ cd app/frontend && npm install && npm run build        # tsc --noEmit && vite bu
 
 ## How this project is organized
 
-This project is driven by the [GOTM operating protocol](.gotm/PROTOCOL.md). Orchestration and produced
-assets are deliberately separated:
-
 | Path | Role |
 |---|---|
 | [`src/geniefy_core/`](src/geniefy_core) | hermetic agent core (state · profiler · context · reasoner · judge · gate · orchestrator) |
@@ -112,20 +108,7 @@ assets are deliberately separated:
 | [`app/frontend/`](app/frontend) | Vite + React + TypeScript + Tailwind SPA |
 | [`migrations/`](migrations) | idempotent Lakebase schema migrations + runner |
 | [`jobs-bundle/`](jobs-bundle) | the standalone hands-off Job bundle |
-| [`docs/`](docs) | [`ARCHITECTURE.md`](docs/ARCHITECTURE.md) + [`design/`](docs/design) (HLD + per-component LLDs) |
-| [`.gotm/`](.gotm) | GOTM orchestration — protocol, ledger, decisions, questions, audits (build provenance) |
-
-GOTM files:
-
-- [`.gotm/PROTOCOL.md`](.gotm/PROTOCOL.md) — operating protocol; read first every session
-- [`.gotm/LEDGER.md`](.gotm/LEDGER.md) — canonical list of units (working state)
-- [`.gotm/DECISIONS.md`](.gotm/DECISIONS.md) — append-only log of ratified decisions
-- [`.gotm/audits/`](.gotm/audits) — independent audit outputs
-
-> **Contributor note:** `.gotm/` (build orchestration) and `.claude/` (a dev-only immutability hook) are
-> `sync.exclude`d in [`databricks.yml`](databricks.yml) — they stay in the repo as build provenance but
-> never upload to the workspace. The Databricks App *resource* is named `geniefy-dev`; the product/repo is
-> geniefy-lite.
+| [`docs/`](docs) | [`ARCHITECTURE.md`](docs/ARCHITECTURE.md) · [`DEPLOY.md`](docs/DEPLOY.md) |
 
 ## License
 

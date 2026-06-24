@@ -36,3 +36,4 @@ jobs-bundle/.databricks/
 
 # Local env / secrets
 .env
+sync-mirror.sh

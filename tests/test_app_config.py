@@ -19,7 +19,7 @@ from geniefy_core.state import SessionMode
 def _full_env(**overrides) -> dict:
     env = {
         "GENIEFY_MODEL_ENDPOINT": "databricks-claude-sonnet-4-6",
-        "GENIEFY_WAREHOUSE_ID": "0336d1a2b47936b4",
+        "GENIEFY_WAREHOUSE_ID": "abcd1234ef567890",
         "GENIEFY_PG_HOST": "ep-example.database.us-east-1.cloud.databricks.com",
         "GENIEFY_PG_DATABASE": "geniefy",
     }
@@ -33,7 +33,7 @@ def _full_env(**overrides) -> dict:
 def test_minimal_valid_env_applies_defaults():
     cfg = AppConfig.from_env(_full_env())
     assert cfg.model_endpoint == "databricks-claude-sonnet-4-6"
-    assert cfg.warehouse_id == "0336d1a2b47936b4"
+    assert cfg.warehouse_id == "abcd1234ef567890"
     assert cfg.pg_database == "geniefy" and cfg.pg_schema == "geniefy" and cfg.secret_scope == "geniefy"
     rc = cfg.run_config
     assert rc.mode == SessionMode.INTERACTIVE and rc.keep_threshold == 0.75

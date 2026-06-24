@@ -1,8 +1,6 @@
 # geniefy-lite — Architecture
 
-A consolidated, current (R1–R4) view of how geniefy-lite is put together. For the original design
-rationale see [`docs/design/HLD.md`](design/HLD.md) and the per-component `LLD-*.md` files; for the
-operating protocol that produced this codebase see [`.gotm/PROTOCOL.md`](../.gotm/PROTOCOL.md).
+A consolidated view of how geniefy-lite is put together.
 
 ---
 
@@ -195,13 +193,9 @@ copies are git-ignored build artifacts.
 | [`jobs/`](../jobs), [`jobs-bundle/`](../jobs-bundle) | hands-off Job entrypoint + its standalone bundle |
 | [`migrations/`](../migrations) | idempotent Lakebase schema migrations + runner |
 | [`tests/`](../tests) | hermetic test suite (375 tests, no infra) |
-| [`docs/design/`](design) | HLD + per-component LLDs + amendment LLDs |
-| [`.gotm/`](../.gotm) | GOTM build provenance — protocol, ledger, decisions, audits |
+| [`docs/`](.) | Architecture guide, deploy guide, screenshots |
 
 ## 10. Further reading
 
-- [`docs/design/HLD.md`](design/HLD.md) — high-level design
-- `docs/design/LLD-agent-core.md`, `LLD-app-backend.md`, `LLD-data-layer.md`, `LLD-frontend.md`,
-  `LLD-review-apply.md`, `LLD-profiling-tool.md`, `LLD-packaging-deployment.md`, `LLD-ux-delight.md`
-- `docs/design/LLD-amend-00{1..6}.md` — the R2–R4 enhancement designs (hands-off, library, enrichment)
-- [`README.md`](../README.md) — deploy + run instructions
+- [`docs/DEPLOY.md`](DEPLOY.md) — full deployment guide with prerequisites, steps, and flags
+- [`README.md`](../README.md) — overview and quick-start instructions

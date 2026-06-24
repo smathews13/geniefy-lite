@@ -99,7 +99,7 @@ def _state(session_id=None, with_drafts=True):
 # ─────────────────────────────────────────────────────────────────────────────
 def test_save_assigns_session_id_when_new():
     st = _state(session_id=None)
-    sid = SessionStore(FakeConn()).save(st, created_by="rohit@databricks.com")
+    sid = SessionStore(FakeConn()).save(st, created_by="user@example.com")
     assert sid and st.session_id == sid
 
 
