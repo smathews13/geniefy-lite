@@ -110,16 +110,47 @@ Severity legend: **[P1]** undermines a core GOTM promise · **[P2]** real fricti
 
 **Recommendation.** State it explicitly in `PROTOCOL.md.template` (Resilience + Anti-drift) and the `gotm` skills: **"A unit is registered `queued`/`in_progress`, never `done`; flip to `done` only after its output exists and is verified — in the same turn (write-back gate)."** Optionally make the immutability hook's block message name the fix directly ("if you are *producing* this output now, set the unit to `in_progress` first"). Cheap to document; removes a self-inflicted block that, handled carelessly, tempts disabling the hook.
 
+---
+
+## Addendum (2026-06-23) — findings from *completing* the project (R1–R5, publish, retrospective)
+
+The original G1–G14 were captured early (first session, 3 units). The project then ran to completion — ~160 units across R1–R5, a private-repo publish, a live Databricks-Apps + Lakebase + DAB deployment iterated many times, ~113 independent audits, and finally `/gotm:learn`. Four *new* framework-level gaps surfaced that only a long, finished, multi-session project reveals. (Tech-level lessons went to `.gotm/LEARNINGS.md`; these are GOTM-the-framework gaps.)
+
+### G15 **[P2]** The recovery log fragments into two places with two orderings over a long project
+**Observed.** PROTOCOL/`CLAUDE.md` designate **`LEDGER.md → Recent updates` as *the* recovery log**. In a long run the ledger drifted into **two** recovery logs: a newest-first **status-banner stack under the `## Active unit` heading at the top**, and the original **oldest-first `Recent updates` prose list at the bottom** — which went stale (its last entry was ~10 days and ~80 units before project end). Running `/gotm:learn` this session, I went looking for the recovery log at the bottom (per the protocol's wording), found a stale 2026-06-13 tail, and burned tool calls reconciling that against the top banner stack before realizing the *real* log had migrated to `## Active unit`. A cold reader pays that tax every time. Also: `## Active unit` is a **misnomer at completion** — it holds a stack of *done*-milestone banners, not an active unit.
+**What we did (this project).** Kept appending newest-first banners under `## Active unit` (it's where the live state actually was) and left the bottom list as historical sediment — i.e. lived with the split rather than restructuring a heavily-cross-referenced ledger late.
+**Recommendation.** Pin **one** recovery-log location and ordering in `LEDGER.md.template` and PROTOCOL: either (a) make `## Active unit` officially *be* the recovery log (rename it e.g. `## Status / recovery log (newest first)` and drop the separate bottom list), or (b) keep `Recent updates` as the single log and forbid a parallel top stack. Whichever — say it once, and have the session-start reconcile/`/gotm:what` warn when a second de-facto log appears (a `## Active unit` block with >1 dated entry while `Recent updates` is also being written).
+
+### G16 **[P1]** `/gotm:learn` ships the *produce* half of the learning loop; the *consume* half is unshipped — so learnings are written into a void
+**Observed.** `/gotm:learn` worked well and emitted a clean `.gotm/LEARNINGS.md` (13 candidate records, Index + schema + merge model). But its entire stated purpose — *"a future project's consume step reads exactly this"* — has **nothing on the other end**: the plugin ships `commands/{audit,bootstrap,learn,what}.md` with **no `consult`/`consume` command**, the bootstrap never scans a learnings pool, and there is **no defined aggregation location**. The maintainers acknowledge this directly (`README.md`: *"The consume half + user-/enterprise-level aggregation are described, not shipped"*). The net effect in practice: I produced well-formed candidate learnings that **no current GOTM mechanism will ever read back**. A produce-only loop trains the agent to spend real tokens distilling lessons that can't feed forward — which quietly erodes trust in the feature.
+**What we did (this project).** Emitted the file to spec and recorded honestly that cross-project validation/consumption is downstream and absent. Nothing consumes it yet.
+**Recommendation.** Ship a **minimum-viable consume step** so the loop closes, even before full enterprise aggregation: (1) a **`/gotm:consult <tags|task>`** command that scans known `LEARNINGS.md` files (a configured list, a sibling-repo glob, or a user-level `~/.gotm/learnings/`) and surfaces tag-relevant **candidate** records for the work at hand; and (2) a **bootstrap step** that, at project start, pulls in any learnings matching the new project's stack/domain tags and drops them where the agent will see them (e.g. a `.gotm/CONSULTED.md` or context note). Even a dumb file-glob + tag-filter beats /dev/null. Until then, `/gotm:learn`'s own description should stop implying a consumer exists.
+
+### G17 **[P2]** The audit checklist's two blind spots are *exactly* the project's only two FAILs
+**Observed.** Across ~113 audits the project had precisely **two FAILs**, and both fell in gaps the shipped 5-point checklist (existence · spec-match · cross-reference · consistency · decision-fidelity) doesn't explicitly target: **(U13)** a decision was *documented but not enforced* — D25 said "exclude `.gotm/` from the deploy artifact" but `databricks.yml` had no `sync:exclude`, so dev tooling would ship; **(U145)** a fix *claimed* to wire a helper into **both** SQL runners but a `replace_all` matched only one (indentation differed), leaving the critical path on the old code — and the happy-path suite had no per-site assertion. "Decision fidelity" is adjacent to U13 but reads as "does the output honor the decision," not "is the decision *enforced by a gate vs. only written down*"; and nothing in the checklist says "verify multi-site claims by count."
+**What we did (this project).** Caught both via independent audit (the gate worked), fixed them in follow-on units (U15, U146 + a regression test), and generalized both as `LEARNINGS.md` L8/L9.
+**Recommendation.** Add two checks to the audit checklist in `PROTOCOL.md.template` (Appendix D): **(6) enforcement check** — for each behavioral decision the unit cites, is there a *gate/config/assertion* that makes it hold, or is it only prose? a documented-but-unenforced decision is a finding; and **(7) multi-site claim check** — any "wired into both X and Y" / "applied across N sites" claim is verified by grep/count, with a guard test expected per site. These are the two failure modes that actually reached FAIL here; the checklist should name them.
+
+### G18 **[P3]** The hand-edited ledger unit-table is also machine-parsed by the immutability hook — a botched edit corrupts both reader and guard
+**Observed.** `LEDGER.md`'s unit table is simultaneously (a) free-form prose humans/agents hand-edit and (b) the input the immutability hook parses positionally (`cells[-2]`=output, `cells[-1]`=status, split on `|`). This session the table got **corrupted twice** by a `replace_all` and a mis-placed `Edit` (the U147/U148 rows), which I had to hand-repair. A mangled row doesn't just mislead a reader — it can silently change *what the hook freezes* (a broken Output cell → wrong/zero frozen path), degrading the very enforcement G1/Appendix B relies on, with no error.
+**What we did (this project).** Caught the corruption by eye and repaired the rows; no automated check flagged it.
+**Recommendation.** Add a lightweight **ledger-parse lint** (in `/gotm:what` and session-start reconcile): every `^| U\d+ |` row must split to the expected column count with a non-empty status ∈ {pending,in_progress,done,superseded} and a parseable Output cell; warn on any row the hook would misread. Cheap, and it protects both the human-readable ledger and the hook that depends on its shape. (P3 — only bites on long, heavily-edited ledgers, which is exactly when the hook matters most.)
+
+---
+
 ## Suggested priority order for the framework
 
 1. **G10** — resilience: session-start reconciliation + crash-safe write ordering + transcript-independence. Makes GOTM's *core promise* (no context loss) hold under accidental/hard ends, not just clean ones. Most fundamental.
 2. **G11** — operationalize audit gates: independence (auditor ≠ author, via dispatched subagent), a concrete checklist, verdicts, and a real gate. Without this, Rule 4 is aspirational and an autonomous run can't be trusted.
-3. **G1** — add the anti-drift safeguards to the template (+ the enforcement hook). Closes the gap between GOTM's promise and its mechanism.
-4. **G3** — fix/document the `CLAUDE.md` auto-load dependency. Silent continuity loss is a scary failure.
-5. **G4** — codify governance-docs-vs-unit-outputs.
-6. **G2** — document the `.gotm/` layout option.
-7. **G5, G6** — off-mission convention + sanctioned audit deferral.
-8. **G7, G8, G9** — polish.
+3. **G16** — ship the *consume* half of the learning loop. `/gotm:learn` now produces `LEARNINGS.md` into a void (no reader exists); a produce-only loop spends tokens on lessons that can't feed forward. Even a dumb tag-filtered `/gotm:consult` + bootstrap pull closes it. *(New, P1.)*
+4. **G1** — add the anti-drift safeguards to the template (+ the enforcement hook). Closes the gap between GOTM's promise and its mechanism.
+5. **G17** — add the enforcement + multi-site-claim checks to the audit checklist. They're the two failure modes that actually reached FAIL across ~113 audits. *(New, P2.)*
+6. **G15** — collapse the recovery log to one location + one ordering. The split (top banner stack vs. stale bottom list) taxes every cold reader. *(New, P2.)*
+7. **G3** — fix/document the `CLAUDE.md` auto-load dependency. Silent continuity loss is a scary failure.
+8. **G4** — codify governance-docs-vs-unit-outputs.
+9. **G2** — document the `.gotm/` layout option.
+10. **G5, G6** — off-mission convention + sanctioned audit deferral.
+11. **G7, G8, G9, G12, G13, G14, G18** — polish (G18: ledger-parse lint).
 
 ---
 
@@ -138,8 +169,12 @@ Concrete map of each improvement to the plugin file(s) to change, so this feedba
 | 7 | **`.gotm/` layout option + root `CLAUDE.md` bridge + auto-load caveat** (document the dependency that silently breaks if buried in a subfolder) | `gotm:gotm` skill (bootstrap steps) + `README.md.template` | G2 · G3 |
 | 8 | **Software-project worked example** (HLD/LLD as foundation units, code units after, audit unit before code) | `gotm:gotm` skill | G9 |
 | 9 | **Auto-stamp `last_updated` / dates** (convention or hook) | `templates/LEDGER.md.template` / hook | G8 |
+| 10 | **Ship the *consume* half of the learning loop** — a `/gotm:consult <tags\|task>` command (scan known `LEARNINGS.md` / a `~/.gotm/learnings/` pool, tag-filter, surface candidates) + a bootstrap step that pulls stack/domain-matching learnings into the new project | new `commands/consult.md`; `gotm:gotm` skill bootstrap; `commands/learn.md` (stop implying a consumer until then) | G16 |
+| 11 | **Audit checklist: add (6) enforcement check + (7) multi-site-claim check** — the two failure modes that actually reached FAIL | `templates/PROTOCOL.md.template` (Audit gates / Appendix D); `templates/prompts/audit.md` | G17 |
+| 12 | **One recovery log, one ordering** — make `## Active unit` officially the newest-first recovery log (rename + drop the parallel bottom list), or forbid the top stack; reconcile/`what` warns on a second de-facto log | `templates/LEDGER.md.template`; `templates/PROTOCOL.md.template` (Resilience) | G15 |
+| 13 | **Ledger-parse lint** — every `^\| U\d+ \|` row splits to the expected columns with a valid status + parseable Output cell; warn on rows the immutability hook would misread | `commands/what.md`; `templates/PROTOCOL.md.template` (session-start reconcile) | G18 |
 
-After syncing: bump the plugin version and add a changelog entry referencing these. Priority order is in the section above (G10 → G11 → G1 first).
+After syncing: bump the plugin version and add a changelog entry referencing these. Priority order is in the section above (**G16** now joins the P1 band with G10/G11/G1).
 
 > Provenance: all of the above was derived and battle-tested while bootstrapping & running **geniefy-v3** under GOTM (25 decisions, 9 units). The appendices below carry the verbatim, paste-ready text.
 
