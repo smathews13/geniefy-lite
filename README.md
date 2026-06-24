@@ -83,22 +83,6 @@ Lakebase. **`deploy.sh` does this for you** via
 safe to re-run. The bundle also declares a **`geniefy_setup`** job that runs the same migration on a job
 cluster.
 
-## Run the tests
-
-The agent core + backend are fully **hermetic** — the 375-test suite runs with fakes, no Databricks infra:
-
-```bash
-python3 -m venv .venv
-.venv/bin/pip install -r requirements-dev.txt
-PYTHONPATH=src .venv/bin/python -m pytest -q          # -> 375 passed, 1 skipped
-```
-
-Frontend build/typecheck:
-
-```bash
-cd app/frontend && npm install && npm run build        # tsc --noEmit && vite build
-```
-
 ## How this project is organized
 
 | Path | Role |
